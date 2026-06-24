@@ -150,6 +150,9 @@
                 <a class="side-link {{ request()->routeIs('monitoring.*') ? 'active' : '' }}" href="{{ route('monitoring.index') }}">
                     <i class="bi bi-broadcast-pin"></i><span>Monitoring</span>
                 </a>
+                <a class="side-link {{ request()->routeIs('devices.*') ? 'active' : '' }}" href="{{ route('devices.index') }}">
+                    <i class="bi bi-router"></i><span>Alat EKG</span>
+                </a>
             </nav>
             <div class="nav-label">Service</div>
             <div class="px-3 small text-white-50"><i class="bi bi-circle-fill text-success me-2"></i>MQTT Broker</div>

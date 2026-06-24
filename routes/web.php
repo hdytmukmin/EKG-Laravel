@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\RecordingController;
@@ -26,6 +27,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/rekaman/{recording}', [RecordingController::class, 'show'])->name('recordings.show');
 
     Route::get('/monitoring', [MonitoringController::class, 'index'])->name('monitoring.index');
+    Route::get('/alat-ekg', [DeviceController::class, 'index'])->name('devices.index');
+    Route::post('/alat-ekg', [DeviceController::class, 'store'])->name('devices.store');
+    Route::put('/alat-ekg/{device}', [DeviceController::class, 'update'])->name('devices.update');
+    Route::delete('/alat-ekg/{device}', [DeviceController::class, 'destroy'])->name('devices.destroy');
+
     Route::get('/api/monitoring/latest', [MonitoringController::class, 'latest'])->name('monitoring.latest');
     Route::get('/api/patients/{patient}/bpm-trend', [PatientController::class, 'bpmTrend'])->name('patients.bpm-trend');
     Route::get('/api/recordings/{recording}/chart-data', [RecordingController::class, 'chartData'])->name('recordings.chart-data');
