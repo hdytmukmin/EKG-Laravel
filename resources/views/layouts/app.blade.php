@@ -102,6 +102,15 @@
         .table { vertical-align: middle; }
         .table thead th { color: #526c7c; font-size: .82rem; text-transform: uppercase; letter-spacing: .04em; background: #f6fafc; }
         .chart-box { height: 310px; }
+        .ekg-scroll {
+            overflow-x: auto;
+            overflow-y: hidden;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fff;
+            padding: 12px;
+        }
+        .ekg-scroll canvas { display: block; }
         .empty-state { padding: 34px; text-align: center; color: var(--muted); }
         .badge { border-radius: 6px; }
         @media (max-width: 991.98px) {
@@ -152,7 +161,13 @@
                     <h1>@yield('page_title', 'Dashboard EKG')</h1>
                     <p>@yield('page_subtitle', 'Ringkasan pasien, rekaman, dan indikator denyu jantung')</p>
                 </div>
-                <div class="text-secondary"><i class="bi bi-database-check me-2"></i>MySQL iot.recordekg</div>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="text-secondary"><i class="bi bi-person-circle me-2"></i>{{ auth()->user()->name ?? 'Guest' }}</div>
+                    <form method="POST" action="{{ route('logout') }}">
+                        @csrf
+                        <button class="btn btn-sm btn-outline-secondary" type="submit" title="Logout"><i class="bi bi-box-arrow-right"></i></button>
+                    </form>
+                </div>
             </header>
             <section class="content">
                 @include('partials.alerts')

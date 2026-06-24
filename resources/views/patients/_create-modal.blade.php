@@ -7,9 +7,16 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
             </div>
             <div class="modal-body">
-                <label class="form-label">Nama pasien</label>
-                <input name="nama" class="form-control" required maxlength="255" placeholder="Contoh: AMH">
-                <div class="form-text">Nama ini dipakai untuk mencocokkan data yang masuk dari alat IoT.</div>
+                <div class="mb-3">
+                    <label class="form-label">Nama pasien</label>
+                    <input name="name" class="form-control" required maxlength="255" placeholder="Contoh: AMH">
+                </div>
+                <div class="row g-2">
+                    <div class="col-6"><label class="form-label">Umur</label><input name="age" type="number" min="0" max="120" class="form-control"></div>
+                    <div class="col-6"><label class="form-label">Gender</label><input name="gender" class="form-control" placeholder="Laki-laki/Perempuan"></div>
+                </div>
+                <div class="mt-3"><label class="form-label">Alamat</label><textarea name="address" class="form-control" rows="2"></textarea></div>
+                <div class="form-text mt-2">Pasien otomatis terikat ke puskesmas admin yang sedang login.</div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>

@@ -2,59 +2,78 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\RecordEkg;
-use App\Support\RecordEkgService;
+use App\Models\Device;
+use App\Models\RecordingSession;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class MonitoringController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         try {
-            $dashboard = RecordEkgService::dashboard();
-            $latest = RecordEkg::query()
-                ->whereNotIn('tspt', ['', '0', '0.0'])
-                ->whereNotIn('bpm', ['', '0', '0.0'])
-                ->orderByDesc('id')
-                ->first() ?? RecordEkg::query()->orderByDesc('id')->first();
-            $recentRows = RecordEkg::query()->orderByDesc('id')->limit(10)->get();
+            $devices = Device::query()
+                ->with('puskesmas')
+                ->when(! $request->user()->isSuperAdmin(), fn ($query) => $query->where('puskesmas_id', $request->user()->puskesmas_id))
+                ->latest('last_seen_at')
+                ->get();
+
+            $latest = RecordingSession::query()
+                ->visibleTo($request->user())
+                ->with(['patient', 'puskesmas', 'device', 'feature', 'prediction'])
+                ->latest('recorded_at')
+                ->first();
+
+            $sessions = RecordingSession::query()
+                ->visibleTo($request->user())
+                ->with(['patient', 'puskesmas', 'device', 'feature', 'prediction'])
+                ->latest('recorded_at')
+                ->limit(10)
+                ->get();
+
             $dbError = null;
         } catch (QueryException $exception) {
-            $dashboard = ['total_patients' => 0, 'completed_records' => 0, 'avg_bpm' => 0, 'latest_record' => '-', 'chart_labels' => [], 'chart_bpm' => []];
+            $devices = collect();
             $latest = null;
-            $recentRows = collect();
+            $sessions = collect();
             $dbError = $exception->getMessage();
         }
 
-        return view('monitoring.index', compact('dashboard', 'latest', 'recentRows', 'dbError'));
+        return view('monitoring.index', compact('devices', 'latest', 'sessions', 'dbError'));
     }
 
-    public function latest(): JsonResponse
+    public function latest(Request $request): JsonResponse
     {
         try {
-            $dashboard = RecordEkgService::dashboard();
-            $latest = RecordEkg::query()
-                ->whereNotIn('tspt', ['', '0', '0.0'])
-                ->whereNotIn('bpm', ['', '0', '0.0'])
-                ->orderByDesc('id')
-                ->first() ?? RecordEkg::query()->orderByDesc('id')->first();
+            $latest = RecordingSession::query()
+                ->visibleTo($request->user())
+                ->with(['patient', 'puskesmas', 'device', 'feature', 'prediction'])
+                ->latest('recorded_at')
+                ->first();
+
+            $devices = Device::query()
+                ->when(! $request->user()->isSuperAdmin(), fn ($query) => $query->where('puskesmas_id', $request->user()->puskesmas_id))
+                ->get();
 
             return response()->json([
                 'ok' => true,
                 'database' => 'connected',
-                'dashboard' => $dashboard,
                 'latest' => $latest ? [
                     'id' => $latest->id,
-                    'nama' => $latest->nama,
-                    'tglrekam' => $latest->tglrekam,
-                    'tspt' => $latest->tspt,
-                    'bpm' => $latest->bpm,
-                    'irr' => $latest->irr,
-                    'irrlokal' => $latest->irrlokal,
-                    'status' => $latest->status(),
-                    'heart_rate' => $latest->heartRateSeries(),
+                    'patient' => $latest->patient?->name,
+                    'puskesmas' => $latest->puskesmas?->name,
+                    'recorded_at' => $latest->recorded_at?->format('Y-m-d H:i:s'),
+                    'bpm' => $latest->feature?->bpm,
+                    'rr' => $latest->feature?->rr,
+                    'prediction' => $latest->prediction?->label,
                 ] : null,
+                'devices' => $devices->map(fn ($device) => [
+                    'id' => $device->id,
+                    'name' => $device->name,
+                    'status' => $device->status,
+                    'last_seen_at' => $device->last_seen_at?->format('Y-m-d H:i:s'),
+                ])->values(),
                 'checked_at' => now()->format('Y-m-d H:i:s'),
             ]);
         } catch (QueryException $exception) {

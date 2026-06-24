@@ -2,14 +2,14 @@
 
 @section('title', 'Monitoring Service')
 @section('page_title', 'Monitoring Service')
-@section('page_subtitle', 'Ringkasan koneksi database, MQTT, dan data terakhir dari alat')
+@section('page_subtitle', 'Status koneksi database, MQTT, alat EKG, dan sesi terakhir')
 
 @section('content')
     <div class="row g-4">
         <div class="col-12 col-xl-4">
             <div class="panel">
                 <div class="panel-header">
-                    <h2 class="h5 fw-bold mb-0">Status</h2>
+                    <h2 class="h5 fw-bold mb-0">Status Sistem</h2>
                 </div>
                 <div class="panel-body">
                     <div class="d-flex justify-content-between border-bottom py-3">
@@ -18,7 +18,7 @@
                     </div>
                     <div class="d-flex justify-content-between border-bottom py-3">
                         <span>MQTT Broker</span>
-                        <span class="badge text-bg-success">Active</span>
+                        <span class="badge text-bg-success">Configured</span>
                     </div>
                     <div class="d-flex justify-content-between py-3">
                         <span>Subscriber</span>
@@ -27,12 +27,32 @@
                     <div class="small text-secondary mt-2">Last check: <span id="lastCheck">-</span></div>
                 </div>
             </div>
+
+            <div class="panel mt-4">
+                <div class="panel-header">
+                    <h2 class="h5 fw-bold mb-0">Alat EKG</h2>
+                </div>
+                <div class="panel-body">
+                    @forelse ($devices as $device)
+                        <div class="d-flex align-items-start justify-content-between gap-3 border-bottom py-3">
+                            <div>
+                                <div class="fw-bold">{{ $device->name }}</div>
+                                <div class="small text-secondary">{{ $device->puskesmas?->name ?? '-' }}</div>
+                                <div class="small text-secondary">Last seen: {{ $device->last_seen_at?->format('Y-m-d H:i:s') ?? '-' }}</div>
+                            </div>
+                            <span class="badge {{ $device->status === 'online' ? 'text-bg-success' : 'text-bg-secondary' }}">{{ $device->status }}</span>
+                        </div>
+                    @empty
+                        <div class="empty-state">Belum ada alat.</div>
+                    @endforelse
+                </div>
+            </div>
         </div>
         <div class="col-12 col-xl-8">
             <div class="panel">
                 <div class="panel-header">
                     <h2 class="h5 fw-bold mb-0">Data Terakhir</h2>
-                    <span class="text-secondary small">Dari tabel recordekg</span>
+                    <span class="text-secondary small">Dari recording_sessions</span>
                 </div>
                 <div class="panel-body">
                     @if ($latest)
@@ -41,7 +61,7 @@
                                 <div class="stat-card">
                                     <div>
                                         <div class="stat-label">Pasien</div>
-                                        <div id="latestName" class="fw-bold fs-5">{{ $latest->nama ?: '-' }}</div>
+                                        <div id="latestName" class="fw-bold fs-5">{{ $latest->patient?->name ?? '-' }}</div>
                                     </div>
                                     <div class="stat-icon"><i class="bi bi-person-vcard fs-4"></i></div>
                                 </div>
@@ -50,7 +70,7 @@
                                 <div class="stat-card">
                                     <div>
                                         <div class="stat-label">BPM</div>
-                                        <div id="latestBpm" class="stat-value">{{ $latest->bpm ?: 0 }}</div>
+                                        <div id="latestBpm" class="stat-value">{{ $latest->feature?->bpm ? number_format($latest->feature->bpm, 1) : 0 }}</div>
                                     </div>
                                     <div class="stat-icon"><i class="bi bi-heart-pulse fs-4"></i></div>
                                 </div>
@@ -59,7 +79,7 @@
                                 <div class="stat-card">
                                     <div>
                                         <div class="stat-label">Tanggal</div>
-                                        <div id="latestTime" class="fw-bold text-break">{{ $latest->tglrekam ?: '-' }}</div>
+                                        <div id="latestTime" class="fw-bold text-break">{{ $latest->recorded_at?->format('Y-m-d H:i:s') ?? '-' }}</div>
                                     </div>
                                     <div class="stat-icon"><i class="bi bi-clock fs-4"></i></div>
                                 </div>
@@ -70,15 +90,15 @@
                     @endif
                 </div>
             </div>
-        </div>
-    </div>
 
-    <div class="panel mt-4">
-        <div class="panel-header">
-            <h2 class="h5 fw-bold mb-0">Aktivitas Terbaru</h2>
-        </div>
-        <div class="panel-body">
-            @include('patients._table', ['records' => $recentRows, 'showActions' => false])
+            <div class="panel mt-4">
+                <div class="panel-header">
+                    <h2 class="h5 fw-bold mb-0">Aktivitas Terbaru</h2>
+                </div>
+                <div class="panel-body">
+                    @include('recordings._sessions-table', ['sessions' => $sessions])
+                </div>
+            </div>
         </div>
     </div>
 @endsection
@@ -104,9 +124,9 @@
                     const latestName = document.getElementById('latestName');
                     const latestBpm = document.getElementById('latestBpm');
                     const latestTime = document.getElementById('latestTime');
-                    if (latestName) latestName.textContent = payload.latest.nama || '-';
+                    if (latestName) latestName.textContent = payload.latest.patient || '-';
                     if (latestBpm) latestBpm.textContent = payload.latest.bpm || '0';
-                    if (latestTime) latestTime.textContent = payload.latest.tglrekam || '-';
+                    if (latestTime) latestTime.textContent = payload.latest.recorded_at || '-';
                 }
             } else {
                 databaseStatus.textContent = 'Check';

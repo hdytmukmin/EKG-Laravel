@@ -2,7 +2,15 @@
 
 namespace App\Console\Commands;
 
-use App\Models\RecordEkg;
+use App\Models\Device;
+use App\Models\EkgFeature;
+use App\Models\EkgRawSignal;
+use App\Models\Patient;
+use App\Models\Prediction;
+use App\Models\Puskesmas;
+use App\Models\RecordingSession;
+use App\Services\AfClassificationService;
+use App\Services\SdnnSnsExtractorService;
 use Illuminate\Console\Command;
 use PhpMqtt\Client\ConnectionSettings;
 use PhpMqtt\Client\MqttClient;
@@ -10,24 +18,25 @@ use Throwable;
 
 class MqttListenCommand extends Command
 {
-    protected $signature = 'mqtt:listen {--once : Stop after one complete EKG payload is saved}';
+    protected $signature = 'mqtt:listen {--once : Stop after one complete EKG feature payload is saved}';
 
-    protected $description = 'Listen to EKG MQTT topics and update the recordekg table.';
+    protected $description = 'Listen to EKG MQTT topics and store data into the AF/Non-AF Laravel schema.';
 
     private const TOPIC_TO_FIELD = [
-        'building/subjek' => 'nama',
-        'building/tspt' => 'tspt',
+        'building/subjek' => 'subject',
+        'building/tspt' => 'interval_pt',
         'building/bpm' => 'bpm',
-        'building/RR' => 'irr',
-        'building/rrlokal' => 'irrlokal',
-        'building/hrr' => 'hr',
+        'building/RR' => 'rr',
+        'building/rrlokal' => 'rr_lokal',
+        'building/hrr' => 'heart_rate',
+        'building/rawdata' => 'raw_signal',
     ];
 
-    private const REQUIRED_FIELDS = ['nama', 'tspt', 'bpm', 'irr', 'irrlokal', 'hr'];
+    private const REQUIRED_FIELDS = ['subject', 'interval_pt', 'bpm', 'rr', 'rr_lokal', 'heart_rate'];
 
     private array $buffer = [];
 
-    public function handle(): int
+    public function handle(SdnnSnsExtractorService $extractor, AfClassificationService $classifier): int
     {
         $host = (string) env('MQTT_HOST', '160.187.144.147');
         $port = (int) env('MQTT_PORT', 1883);
@@ -55,8 +64,8 @@ class MqttListenCommand extends Command
             $mqtt->connect($settings, true);
 
             foreach (self::TOPIC_TO_FIELD as $topic => $field) {
-                $mqtt->subscribe($topic, function (string $topic, string $message) use ($mqtt): void {
-                    $this->handleMessage($topic, $message);
+                $mqtt->subscribe($topic, function (string $topic, string $message) use ($mqtt, $extractor, $classifier): void {
+                    $this->handleMessage($topic, $message, $extractor, $classifier);
 
                     if ($this->option('once') && empty($this->buffer)) {
                         $mqtt->interrupt();
@@ -82,21 +91,25 @@ class MqttListenCommand extends Command
         }
     }
 
-    private function handleMessage(string $topic, string $message): void
-    {
+    private function handleMessage(
+        string $topic,
+        string $message,
+        SdnnSnsExtractorService $extractor,
+        AfClassificationService $classifier
+    ): void {
         $field = self::TOPIC_TO_FIELD[$topic] ?? null;
         if ($field === null) {
             return;
         }
 
-        if ($field === 'nama') {
+        if ($field === 'subject') {
             $this->buffer = [];
         }
 
         $this->buffer[$field] = $message;
-        $this->line("MQTT received: {$topic} => {$message}");
+        $this->line("MQTT received: {$topic}");
 
-        if (! $this->hasCompletePayload()) {
+        if (! $this->hasCompleteFeaturePayload()) {
             return;
         }
 
@@ -106,49 +119,69 @@ class MqttListenCommand extends Command
             return;
         }
 
-        $autoCreate = filter_var(env('MQTT_AUTO_CREATE_PATIENT', true), FILTER_VALIDATE_BOOL);
+        $device = $this->resolveDevice();
+        $patient = Patient::query()->firstOrCreate(
+            [
+                'puskesmas_id' => $device->puskesmas_id,
+                'name' => $payload['subject'],
+            ],
+            [
+                'external_subject_id' => $payload['subject'],
+            ]
+        );
 
-        $record = RecordEkg::query()
-            ->where('nama', $payload['nama'])
-            ->orderByDesc('id')
-            ->first();
-
-        if (! $record && ! $autoCreate) {
-            $this->warn("Patient not found and auto-create disabled: {$payload['nama']}");
-            $this->buffer = [];
-            return;
-        }
-
-        if (! $record) {
-            $record = RecordEkg::create([
-                'nama' => $payload['nama'],
-                'umur' => 0,
-                'jk' => '',
-                'alamat' => '',
-                'tspt' => 0,
-                'bpm' => 0,
-                'irr' => 0,
-                'irrlokal' => 0,
-                'hr' => '[]',
-            ]);
-
-            $this->info("Patient created: ID={$record->id}, Name={$record->nama}");
-        }
-
-        $record->update([
-            'tglrekam' => now()->format('Y-m-d H:i:s'),
-            'tspt' => $payload['tspt'],
-            'bpm' => $payload['bpm'],
-            'irr' => $payload['irr'],
-            'irrlokal' => $payload['irrlokal'],
-            'hr' => $payload['hr'],
+        $device->update([
+            'status' => 'online',
+            'last_seen_at' => now(),
         ]);
 
-        $this->info("Database updated: ID={$record->id}, BPM={$payload['bpm']}");
+        $session = RecordingSession::create([
+            'puskesmas_id' => $device->puskesmas_id,
+            'device_id' => $device->id,
+            'patient_id' => $patient->id,
+            'recorded_at' => now(),
+            'status' => 'completed',
+            'source' => 'mqtt',
+        ]);
+
+        $extracted = $extractor->extract($payload['raw_signal']);
+        $feature = EkgFeature::create([
+            'recording_session_id' => $session->id,
+            'subject' => $payload['subject'],
+            'interval_pt' => $payload['interval_pt'],
+            'bpm' => $payload['bpm'],
+            'rr' => $payload['rr'],
+            'rr_lokal' => $payload['rr_lokal'],
+            'status' => $payload['status'],
+            'sdnn' => $extracted['sdnn'],
+            'sns' => $extracted['sns'],
+            'heart_rate' => $payload['heart_rate'],
+        ]);
+
+        if ($payload['raw_signal'] !== []) {
+            EkgRawSignal::create([
+                'recording_session_id' => $session->id,
+                'voltage_values' => $payload['raw_signal'],
+                'sample_rate' => (int) env('EKG_SAMPLE_RATE', 0) ?: null,
+                'total_samples' => count($payload['raw_signal']),
+            ]);
+        }
+
+        $prediction = $classifier->classify($feature);
+        Prediction::create([
+            'recording_session_id' => $session->id,
+            'label' => $prediction['label'],
+            'confidence' => $prediction['confidence'],
+            'model_version' => $prediction['model_version'],
+            'error_message' => $prediction['error_message'],
+            'predicted_at' => now(),
+        ]);
+
+        $this->info("Session saved: #{$session->id}, Patient={$patient->name}, BPM={$payload['bpm']}");
         $this->buffer = [];
     }
 
-    private function hasCompletePayload(): bool
+    private function hasCompleteFeaturePayload(): bool
     {
         foreach (self::REQUIRED_FIELDS as $field) {
             if (! array_key_exists($field, $this->buffer)) {
@@ -161,14 +194,14 @@ class MqttListenCommand extends Command
 
     private function normalizePayload(array $data): ?array
     {
-        $name = trim(preg_replace('/\s+/', ' ', (string) $data['nama']));
-        if ($name === '') {
-            $this->warn('Payload nama pasien kosong.');
+        $subject = trim(preg_replace('/\s+/', ' ', (string) $data['subject']));
+        if ($subject === '') {
+            $this->warn('Payload subject kosong.');
             return null;
         }
 
         $numbers = [];
-        foreach (['tspt', 'bpm', 'irr', 'irrlokal'] as $field) {
+        foreach (['interval_pt', 'bpm', 'rr', 'rr_lokal'] as $field) {
             if (! is_numeric(trim((string) $data[$field]))) {
                 $this->warn("Payload {$field} tidak valid: {$data[$field]}");
                 return null;
@@ -178,27 +211,59 @@ class MqttListenCommand extends Command
         }
 
         return [
-            'nama' => $name,
-            'tspt' => $numbers['tspt'],
+            'subject' => $subject,
+            'interval_pt' => $numbers['interval_pt'],
             'bpm' => $numbers['bpm'],
-            'irr' => $numbers['irr'],
-            'irrlokal' => $numbers['irrlokal'],
-            'hr' => $this->normalizeHeartRate((string) $data['hr']),
+            'rr' => $numbers['rr'],
+            'rr_lokal' => $numbers['rr_lokal'],
+            'status' => (string) ($data['status'] ?? 'received'),
+            'heart_rate' => $this->normalizeNumericSeries((string) $data['heart_rate']),
+            'raw_signal' => $this->normalizeNumericSeries((string) ($data['raw_signal'] ?? '[]')),
         ];
     }
 
-    private function normalizeHeartRate(string $value): string
+    /**
+     * @return array<int, float>
+     */
+    private function normalizeNumericSeries(string $value): array
     {
         $raw = trim($value);
         if ($raw === '') {
-            return '[]';
+            return [];
         }
 
         $decoded = json_decode($raw, true);
         if (! is_array($decoded)) {
-            $decoded = [$raw];
+            $decoded = preg_split('/[\s,;]+/', trim($raw, "[] \t\n\r\0\x0B")) ?: [];
         }
 
-        return json_encode(array_values($decoded), JSON_THROW_ON_ERROR);
+        return collect($decoded)
+            ->filter(fn ($item) => is_numeric($item))
+            ->map(fn ($item) => (float) $item)
+            ->values()
+            ->all();
+    }
+
+    private function resolveDevice(): Device
+    {
+        $deviceUid = (string) env('MQTT_DEVICE_UID', 'EKG-001');
+        $device = Device::query()->where('device_uid', $deviceUid)->first();
+
+        if ($device) {
+            return $device;
+        }
+
+        $puskesmas = Puskesmas::query()->firstOrCreate(
+            ['code' => 'PKM-001'],
+            ['name' => 'Puskesmas 1']
+        );
+
+        return Device::query()->create([
+            'puskesmas_id' => $puskesmas->id,
+            'name' => 'Alat EKG 1',
+            'device_uid' => $deviceUid,
+            'mqtt_client_id' => env('MQTT_CLIENT_ID'),
+            'status' => 'unknown',
+        ]);
     }
 }

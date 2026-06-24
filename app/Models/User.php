@@ -19,9 +19,11 @@ class User extends Authenticatable
      * @var list<string>
      */
     protected $fillable = [
+        'puskesmas_id',
         'name',
         'email',
         'password',
+        'role',
     ];
 
     /**
@@ -45,5 +47,20 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'super_admin';
+    }
+
+    public function isAdminPuskesmas(): bool
+    {
+        return $this->role === 'admin_puskesmas';
+    }
+
+    public function puskesmas()
+    {
+        return $this->belongsTo(Puskesmas::class);
     }
 }
