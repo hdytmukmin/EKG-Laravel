@@ -35,4 +35,32 @@ class Device extends Model
     {
         return $this->hasMany(RecordingSession::class);
     }
+
+    public function effectiveStatus(): string
+    {
+        if ($this->status === 'maintenance') {
+            return 'maintenance';
+        }
+
+        if (! $this->last_seen_at) {
+            return $this->status === 'online' ? 'offline' : ($this->status ?: 'unknown');
+        }
+
+        $offlineAfterMinutes = (int) env('DEVICE_OFFLINE_AFTER_MINUTES', 2);
+        if ($this->last_seen_at->lt(now()->subMinutes($offlineAfterMinutes))) {
+            return 'offline';
+        }
+
+        return $this->status === 'unknown' ? 'online' : $this->status;
+    }
+
+    public function statusBadgeClass(): string
+    {
+        return match ($this->effectiveStatus()) {
+            'online' => 'text-bg-success',
+            'maintenance' => 'text-bg-warning',
+            'offline' => 'text-bg-danger',
+            default => 'text-bg-secondary',
+        };
+    }
 }

@@ -16,8 +16,13 @@
                 <tr>
                     <td>#{{ $patient->id }}</td>
                     <td>
-                        <div class="fw-bold">{{ $patient->name }}</div>
-                        <div class="small text-secondary text-truncate" style="max-width: 260px">{{ $patient->address ?: 'Alamat belum diisi' }}</div>
+                        <div class="entity-cell">
+                            <div class="entity-avatar"><i class="bi bi-person-heart"></i></div>
+                            <div class="min-w-0">
+                                <div class="fw-bold">{{ $patient->name }}</div>
+                                <div class="small text-secondary text-truncate" style="max-width: 260px">{{ $patient->address ?: 'Alamat belum diisi' }}</div>
+                            </div>
+                        </div>
                     </td>
                     <td>{{ $patient->puskesmas?->name ?? '-' }}</td>
                     <td>{{ $patient->age ?? '-' }}</td>

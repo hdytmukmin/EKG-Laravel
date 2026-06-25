@@ -2,7 +2,7 @@
 
 @section('title', 'Detail Pasien')
 @section('page_title', $patient->name)
-@section('page_subtitle', 'Riwayat pemeriksaan dan tren BPM pasien')
+@section('page_subtitle', 'Riwayat pasien')
 
 @section('content')
     @php

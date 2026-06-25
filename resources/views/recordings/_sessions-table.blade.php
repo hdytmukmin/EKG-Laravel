@@ -16,7 +16,17 @@
             @forelse ($sessions as $session)
                 <tr>
                     <td>#{{ $session->id }}</td>
-                    <td>{{ $session->patient?->name ?? '-' }}</td>
+                    <td>
+                        <div class="entity-cell">
+                            <div class="entity-avatar {{ $session->prediction?->label === 'AF' ? 'danger' : ($session->prediction?->label === 'NON_AF' ? 'success' : '') }}">
+                                <i class="bi bi-heart-pulse"></i>
+                            </div>
+                            <div>
+                                <div class="fw-bold">{{ $session->patient?->name ?? '-' }}</div>
+                                <div class="small text-secondary">{{ $session->device?->name ?? 'Alat belum tercatat' }}</div>
+                            </div>
+                        </div>
+                    </td>
                     <td>{{ $session->puskesmas?->name ?? '-' }}</td>
                     <td class="fw-bold">{{ $session->feature?->bpm ?? '-' }}</td>
                     <td>{{ $session->feature?->rr ?? '-' }}</td>

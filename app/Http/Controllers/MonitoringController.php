@@ -71,7 +71,7 @@ class MonitoringController extends Controller
                 'devices' => $devices->map(fn ($device) => [
                     'id' => $device->id,
                     'name' => $device->name,
-                    'status' => $device->status,
+                    'status' => $device->effectiveStatus(),
                     'last_seen_at' => $device->last_seen_at?->format('Y-m-d H:i:s'),
                 ])->values(),
                 'checked_at' => now()->format('Y-m-d H:i:s'),

@@ -2,9 +2,19 @@
 
 @section('title', 'Pasien EKG')
 @section('page_title', 'Manajemen Pasien')
-@section('page_subtitle', 'Tambah, edit, cari, dan siapkan pasien untuk data dari alat IoT')
+@section('page_subtitle', 'Data pasien')
 
 @section('content')
+    <section class="page-hero">
+        <div class="hero-kicker"><i class="bi bi-person-vcard"></i> Pasien</div>
+        <h2>Data pasien dan riwayat pemeriksaan</h2>
+        <div class="hero-actions">
+            <span class="hero-chip"><i class="bi bi-search"></i> Pencarian</span>
+            <span class="hero-chip"><i class="bi bi-hospital"></i> Puskesmas</span>
+            <span class="hero-chip"><i class="bi bi-clock-history"></i> Riwayat sesi</span>
+        </div>
+    </section>
+
     <div class="panel">
         <div class="panel-header">
             <h2 class="h5 fw-bold mb-0">Daftar Pasien</h2>
@@ -13,10 +23,13 @@
             </button>
         </div>
         <div class="panel-body">
-            <form method="GET" class="row g-2 align-items-end">
+            <form method="GET" class="table-toolbar row g-2 align-items-end">
                 <div class="col-12 col-lg-8">
                     <label class="form-label small text-secondary">Search</label>
-                    <input type="search" name="q" value="{{ request('q') }}" class="form-control" placeholder="Nama, alamat, subject id">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="search" name="q" value="{{ request('q') }}" class="form-control" placeholder="Nama, alamat, subject id">
+                    </div>
                 </div>
                 <div class="col-6 col-lg-2">
                     <label class="form-label small text-secondary">Tampil</label>

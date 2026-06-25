@@ -2,9 +2,19 @@
 
 @section('title', 'Monitoring Service')
 @section('page_title', 'Monitoring Service')
-@section('page_subtitle', 'Status koneksi database, MQTT, alat EKG, dan sesi terakhir')
+@section('page_subtitle', 'Status sistem')
 
 @section('content')
+    <section class="page-hero">
+        <div class="hero-kicker"><i class="bi bi-broadcast"></i> Monitoring</div>
+        <h2>Status sistem dan alat EKG</h2>
+        <div class="hero-actions">
+            <span class="hero-chip"><i class="bi bi-arrow-repeat"></i> Refresh 10 detik</span>
+            <span class="hero-chip"><i class="bi bi-database-check"></i> Database</span>
+            <span class="hero-chip"><i class="bi bi-cpu"></i> Alat EKG</span>
+        </div>
+    </section>
+
     <div class="row g-4">
         <div class="col-12 col-xl-4">
             <div class="panel">
@@ -12,17 +22,19 @@
                     <h2 class="h5 fw-bold mb-0">Status Sistem</h2>
                 </div>
                 <div class="panel-body">
-                    <div class="d-flex justify-content-between border-bottom py-3">
+                    <div class="status-list">
+                    <div class="status-row">
                         <span>Database</span>
                         <span id="databaseStatus" class="badge {{ $dbError ? 'text-bg-warning' : 'text-bg-success' }}">{{ $dbError ? 'Check' : 'Connected' }}</span>
                     </div>
-                    <div class="d-flex justify-content-between border-bottom py-3">
+                    <div class="status-row">
                         <span>MQTT Broker</span>
                         <span class="badge text-bg-success">Configured</span>
                     </div>
-                    <div class="d-flex justify-content-between py-3">
+                    <div class="status-row">
                         <span>Subscriber</span>
                         <span class="badge text-bg-primary">php artisan mqtt:listen</span>
+                    </div>
                     </div>
                     <div class="small text-secondary mt-2">Last check: <span id="lastCheck">-</span></div>
                 </div>
@@ -34,13 +46,13 @@
                 </div>
                 <div class="panel-body">
                     @forelse ($devices as $device)
-                        <div class="d-flex align-items-start justify-content-between gap-3 border-bottom py-3">
+                        <div class="status-row mb-2">
                             <div>
                                 <div class="fw-bold">{{ $device->name }}</div>
                                 <div class="small text-secondary">{{ $device->puskesmas?->name ?? '-' }}</div>
                                 <div class="small text-secondary">Last seen: {{ $device->last_seen_at?->format('Y-m-d H:i:s') ?? '-' }}</div>
                             </div>
-                            <span class="badge {{ $device->status === 'online' ? 'text-bg-success' : 'text-bg-secondary' }}">{{ $device->status }}</span>
+                            <span class="badge {{ $device->statusBadgeClass() }}">{{ ucfirst($device->effectiveStatus()) }}</span>
                         </div>
                     @empty
                         <div class="empty-state">Belum ada alat.</div>
@@ -67,7 +79,7 @@
                                 </div>
                             </div>
                             <div class="col-6 col-md-4">
-                                <div class="stat-card">
+                                <div class="stat-card stat-warning">
                                     <div>
                                         <div class="stat-label">BPM</div>
                                         <div id="latestBpm" class="stat-value">{{ $latest->feature?->bpm ? number_format($latest->feature->bpm, 1) : 0 }}</div>

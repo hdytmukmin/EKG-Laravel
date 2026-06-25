@@ -7,6 +7,7 @@ use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\RecordingController;
 use App\Http\Controllers\UploadController;
+use App\Http\Controllers\UserManagementController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
@@ -31,6 +32,13 @@ Route::middleware('auth')->group(function () {
     Route::post('/alat-ekg', [DeviceController::class, 'store'])->name('devices.store');
     Route::put('/alat-ekg/{device}', [DeviceController::class, 'update'])->name('devices.update');
     Route::delete('/alat-ekg/{device}', [DeviceController::class, 'destroy'])->name('devices.destroy');
+
+    Route::middleware('role:super_admin')->group(function () {
+        Route::get('/users', [UserManagementController::class, 'index'])->name('users.index');
+        Route::post('/users', [UserManagementController::class, 'store'])->name('users.store');
+        Route::put('/users/{user}', [UserManagementController::class, 'update'])->name('users.update');
+        Route::delete('/users/{user}', [UserManagementController::class, 'destroy'])->name('users.destroy');
+    });
 
     Route::get('/api/monitoring/latest', [MonitoringController::class, 'latest'])->name('monitoring.latest');
     Route::get('/api/patients/{patient}/bpm-trend', [PatientController::class, 'bpmTrend'])->name('patients.bpm-trend');

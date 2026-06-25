@@ -2,7 +2,7 @@
 
 @section('title', 'Dashboard EKG')
 @section('page_title', 'Dashboard EKG')
-@section('page_subtitle', $dashboard['is_super_admin'] ? 'Monitoring global seluruh puskesmas' : 'Monitoring internal puskesmas')
+@section('page_subtitle', $dashboard['is_super_admin'] ? 'Seluruh puskesmas' : 'Internal puskesmas')
 
 @section('content')
     @php
@@ -12,7 +12,17 @@
         $latestRaw = $chartSession?->rawSignal?->voltage_values ?? [];
     @endphp
 
-    <form method="GET" class="panel mb-4">
+    <section class="page-hero">
+        <div class="hero-kicker"><i class="bi bi-heart-pulse"></i> Dashboard</div>
+        <h2>{{ $dashboard['is_super_admin'] ? 'Monitoring seluruh puskesmas' : 'Monitoring puskesmas' }}</h2>
+        <div class="hero-actions">
+            <span class="hero-chip"><i class="bi bi-database-check"></i> Database {{ $dbError ? 'Perlu dicek' : 'Connected' }}</span>
+            <span class="hero-chip"><i class="bi bi-cpu"></i> {{ $devices->count() }} alat terdaftar</span>
+            <span class="hero-chip"><i class="bi bi-activity"></i> {{ $sessions->count() }} sesi terbaru</span>
+        </div>
+    </section>
+
+    <form method="GET" class="panel filter-panel mb-4">
         <div class="panel-body row g-3 align-items-end">
             <div class="col-12 col-lg-3">
                 <label class="form-label small text-secondary">Puskesmas</label>
@@ -56,11 +66,11 @@
                     <div class="stat-label">Total Pasien</div>
                     <div class="stat-value">{{ $dashboard['total_patients'] }}</div>
                 </div>
-                <div class="stat-icon"><i class="bi bi-people fs-4"></i></div>
+                <div class="stat-icon"><i class="bi bi-person-vcard fs-4"></i></div>
             </div>
         </div>
         <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
+            <div class="stat-card stat-danger">
                 <div>
                     <div class="stat-label">Total Pasien AF</div>
                     <div class="stat-value">{{ $dashboard['total_af'] }}</div>
@@ -69,7 +79,7 @@
             </div>
         </div>
         <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
+            <div class="stat-card stat-success">
                 <div>
                     <div class="stat-label">Total Pasien Non-AF</div>
                     <div class="stat-value">{{ $dashboard['total_non_af'] }}</div>
@@ -78,7 +88,7 @@
             </div>
         </div>
         <div class="col-12 col-md-6 col-xl-3">
-            <div class="stat-card">
+            <div class="stat-card stat-warning">
                 <div>
                     <div class="stat-label">Sesi Terakhir</div>
                     <div class="fw-bold fs-5 text-break">{{ $latest?->recorded_at?->format('Y-m-d H:i') ?? '-' }}</div>
@@ -118,21 +128,23 @@
                     <h2 class="h5 fw-bold mb-0">Status Sistem</h2>
                 </div>
                 <div class="panel-body">
-                    <div class="d-flex justify-content-between border-bottom py-3">
-                        <span class="text-secondary">Database</span>
+                    <div class="status-list">
+                    <div class="status-row">
+                        <span>Database</span>
                         <span class="badge {{ $dbError ? 'text-bg-warning' : 'text-bg-success' }}">{{ $dbError ? 'Check' : 'Connected' }}</span>
                     </div>
-                    <div class="d-flex justify-content-between border-bottom py-3">
-                        <span class="text-secondary">MQTT Broker</span>
+                    <div class="status-row">
+                        <span>MQTT Broker</span>
                         <span class="badge text-bg-success">Configured</span>
                     </div>
-                    <div class="d-flex justify-content-between border-bottom py-3">
-                        <span class="text-secondary">Alat Terdaftar</span>
+                    <div class="status-row">
+                        <span>Alat Terdaftar</span>
                         <span class="badge text-bg-primary">{{ $devices->count() }}</span>
                     </div>
-                    <div class="d-flex justify-content-between py-3">
-                        <span class="text-secondary">Mode Aplikasi</span>
+                    <div class="status-row">
+                        <span>Mode Aplikasi</span>
                         <span class="badge text-bg-primary">Laravel</span>
+                    </div>
                     </div>
                 </div>
             </div>
@@ -244,8 +256,8 @@
             data: {
                 labels: comparisonLabels,
                 datasets: [
-                    { label: 'AF', data: comparisonAf, backgroundColor: '#dc3545' },
-                    { label: 'Non-AF', data: comparisonNonAf, backgroundColor: '#198754' }
+                    { label: 'AF', data: comparisonAf, backgroundColor: '#d84c6f', borderRadius: 10 },
+                    { label: 'Non-AF', data: comparisonNonAf, backgroundColor: '#1e9b67', borderRadius: 10 }
                 ]
             },
             options: {
