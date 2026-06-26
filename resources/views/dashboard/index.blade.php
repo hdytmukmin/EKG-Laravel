@@ -10,6 +10,11 @@
         $latest = $dashboard['latest_session'];
         $latestHeartRate = $chartSession?->feature?->heart_rate ?? [];
         $latestRaw = $chartSession?->rawSignal?->voltage_values ?? [];
+        $latestFiltered = $chartSession?->rawSignal?->filtered_values ?? [];
+        $latestRPeaks = $chartSession?->rawSignal?->r_peak_indices ?? [];
+        $latestSampleRate = $chartSession?->rawSignal?->sample_rate ?? 360;
+        $latestDuration = count($latestRaw) / max($latestSampleRate, 1);
+        $latestEkgWidth = min(max((int) ceil($latestDuration * 220), 1100), 30000);
     @endphp
 
     <section class="page-hero">
@@ -111,7 +116,7 @@
                 <div class="panel-body">
                     @if ($chartSession)
                         <div class="ekg-scroll mb-4">
-                            <div style="width: {{ max(count($latestRaw) * 4, 900) }}px; height: 310px">
+                            <div style="width: {{ $latestEkgWidth }}px; height: 310px">
                                 <canvas id="ekgChart"></canvas>
                             </div>
                         </div>
@@ -203,9 +208,96 @@
 <script>
     const latestHeartRate = @json(array_values($latestHeartRate));
     const latestRaw = @json(array_values($latestRaw));
+    const latestFiltered = @json(array_values($latestFiltered));
+    const latestRPeaks = @json(array_values($latestRPeaks));
+    const latestSampleRate = @json($latestSampleRate);
     const comparisonLabels = @json($dashboard['comparison_labels']);
     const comparisonAf = @json($dashboard['comparison_af']);
     const comparisonNonAf = @json($dashboard['comparison_non_af']);
+
+    function secondsLabel(value) {
+        return `${Number(value).toFixed(1)}s`;
+    }
+
+    function ecgPoints(values, sampleRate) {
+        return values.map((value, index) => ({ x: index / sampleRate, y: value }));
+    }
+
+    function createEcgViewerChart(canvasId, rawValues, filteredValues, rPeaks, sampleRate) {
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+
+        const filtered = filteredValues.length ? filteredValues : rawValues;
+        const rPeakPoints = rPeaks
+            .filter(index => filtered[index] !== undefined)
+            .map(index => ({ x: index / sampleRate, y: filtered[index] + 0.035 }));
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'Raw',
+                        data: ecgPoints(rawValues, sampleRate),
+                        borderColor: 'rgba(150, 158, 166, .42)',
+                        backgroundColor: 'rgba(150, 158, 166, .18)',
+                        pointRadius: 0,
+                        borderWidth: 1,
+                        tension: .12
+                    },
+                    {
+                        label: 'Filtered',
+                        data: ecgPoints(filtered, sampleRate),
+                        borderColor: '#1f77b4',
+                        backgroundColor: 'rgba(31, 119, 180, .1)',
+                        pointRadius: 0,
+                        borderWidth: 1.45,
+                        tension: .1
+                    },
+                    {
+                        label: 'R-peaks',
+                        type: 'scatter',
+                        data: rPeakPoints,
+                        borderColor: '#e2364f',
+                        backgroundColor: '#e2364f',
+                        pointStyle: 'triangle',
+                        pointRotation: 180,
+                        pointRadius: 5,
+                        pointHoverRadius: 6
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                normalized: true,
+                parsing: false,
+                interaction: { mode: 'nearest', intersect: false },
+                plugins: {
+                    legend: { position: 'top', align: 'start' },
+                    tooltip: {
+                        callbacks: {
+                            title: items => items.length ? `Waktu ${secondsLabel(items[0].parsed.x)}` : '',
+                            label: item => `${item.dataset.label}: ${Number(item.parsed.y).toFixed(4)}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: 'Waktu (s)' },
+                        ticks: { callback: secondsLabel, maxRotation: 0 },
+                        grid: { color: 'rgba(16, 42, 53, .08)' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Amplitude' },
+                        grid: { color: 'rgba(16, 42, 53, .08)' }
+                    }
+                }
+            }
+        });
+    }
 
     const bpmCtx = document.getElementById('bpmChart');
     if (bpmCtx) {
@@ -231,23 +323,7 @@
         });
     }
 
-    const ekgCtx = document.getElementById('ekgChart');
-    if (ekgCtx) {
-        new Chart(ekgCtx, {
-            type: 'line',
-            data: {
-                labels: latestRaw.map((_, index) => index + 1),
-                datasets: [{ label: 'Voltage', data: latestRaw, borderColor: '#d63384', pointRadius: 0, borderWidth: 1.4 }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: latestRaw.length < 1200,
-                plugins: { legend: { display: false } },
-                scales: { x: { display: false }, y: { grid: { color: '#e5eef3' } } }
-            }
-        });
-    }
+    createEcgViewerChart('ekgChart', latestRaw, latestFiltered, latestRPeaks, latestSampleRate);
 
     const globalCtx = document.getElementById('globalAfChart');
     if (globalCtx) {

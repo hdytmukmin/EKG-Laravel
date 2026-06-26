@@ -9,6 +9,11 @@
     @php($prediction = $recording->prediction)
     @php($heartRate = $feature?->heart_rate ?? [])
     @php($rawSignal = $recording->rawSignal?->voltage_values ?? [])
+    @php($filteredSignal = $recording->rawSignal?->filtered_values ?? [])
+    @php($rPeaks = $recording->rawSignal?->r_peak_indices ?? [])
+    @php($sampleRate = $recording->rawSignal?->sample_rate ?? 360)
+    @php($duration = count($rawSignal) / max($sampleRate, 1))
+    @php($ekgWidth = min(max((int) ceil($duration * 220), 1100), 30000))
 
     <div class="row g-3 mb-4">
         <div class="col-12 col-md-3">
@@ -77,7 +82,7 @@
                 </div>
                 <div class="panel-body">
                     <div class="ekg-scroll">
-                        <div style="width: {{ max(count($rawSignal) * 4, 900) }}px; height: 360px">
+                        <div style="width: {{ $ekgWidth }}px; height: 360px">
                             <canvas id="rawChart"></canvas>
                         </div>
                     </div>
@@ -114,6 +119,9 @@
 <script>
     const heartRate = @json(array_values($heartRate));
     const rawSignal = @json(array_values($rawSignal));
+    const filteredSignal = @json(array_values($filteredSignal));
+    const rPeaks = @json(array_values($rPeaks));
+    const sampleRate = @json($sampleRate);
     const rrValue = @json($feature?->rr);
     const rrSeries = heartRate.length ? heartRate.map(() => rrValue) : [rrValue];
 
@@ -145,8 +153,92 @@
         });
     }
 
+    function secondsLabel(value) {
+        return `${Number(value).toFixed(1)}s`;
+    }
+
+    function ecgPoints(values, sampleRate) {
+        return values.map((value, index) => ({ x: index / sampleRate, y: value }));
+    }
+
+    function createEcgViewerChart(canvasId, rawValues, filteredValues, rPeakIndices, sampleRate) {
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
+
+        const filtered = filteredValues.length ? filteredValues : rawValues;
+        const rPeakPoints = rPeakIndices
+            .filter(index => filtered[index] !== undefined)
+            .map(index => ({ x: index / sampleRate, y: filtered[index] + 0.035 }));
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'Raw',
+                        data: ecgPoints(rawValues, sampleRate),
+                        borderColor: 'rgba(150, 158, 166, .42)',
+                        backgroundColor: 'rgba(150, 158, 166, .18)',
+                        pointRadius: 0,
+                        borderWidth: 1,
+                        tension: .12
+                    },
+                    {
+                        label: 'Filtered',
+                        data: ecgPoints(filtered, sampleRate),
+                        borderColor: '#1f77b4',
+                        backgroundColor: 'rgba(31, 119, 180, .1)',
+                        pointRadius: 0,
+                        borderWidth: 1.45,
+                        tension: .1
+                    },
+                    {
+                        label: 'R-peaks',
+                        type: 'scatter',
+                        data: rPeakPoints,
+                        borderColor: '#e2364f',
+                        backgroundColor: '#e2364f',
+                        pointStyle: 'triangle',
+                        pointRotation: 180,
+                        pointRadius: 5,
+                        pointHoverRadius: 6
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                normalized: true,
+                parsing: false,
+                interaction: { mode: 'nearest', intersect: false },
+                plugins: {
+                    legend: { position: 'top', align: 'start' },
+                    tooltip: {
+                        callbacks: {
+                            title: items => items.length ? `Waktu ${secondsLabel(items[0].parsed.x)}` : '',
+                            label: item => `${item.dataset.label}: ${Number(item.parsed.y).toFixed(4)}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: 'Waktu (s)' },
+                        ticks: { callback: secondsLabel, maxRotation: 0 },
+                        grid: { color: 'rgba(16, 42, 53, .08)' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Amplitude' },
+                        grid: { color: 'rgba(16, 42, 53, .08)' }
+                    }
+                }
+            }
+        });
+    }
+
     lineChart('bpmChart', 'BPM', heartRate, 'rgba(10, 132, 193, 1)', true);
     lineChart('rrChart', 'RR Interval', rrSeries, 'rgba(25, 135, 84, 1)', false);
-    lineChart('rawChart', 'Voltage', rawSignal, 'rgba(214, 51, 132, 1)', false);
+    createEcgViewerChart('rawChart', rawSignal, filteredSignal, rPeaks, sampleRate);
 </script>
 @endpush

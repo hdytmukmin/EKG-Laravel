@@ -1,59 +1,392 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# EKG Monitoring AF / Non-AF
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Aplikasi web monitoring EKG berbasis Laravel untuk manajemen pasien, sesi rekaman EKG, grafik sinyal EKG, monitoring alat, dan persiapan klasifikasi AF / Non-AF.
 
-## About Laravel
+Project ini sudah memakai schema Laravel baru, bukan lagi struktur Flask lama. Data contoh EKG berasal dari CSV alat lama dan sudah tersedia dalam seeder.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Fitur Saat Ini
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- Login admin berbasis session Laravel.
+- Role `super_admin` dan `admin_puskesmas`.
+- Dashboard ringkasan pasien, AF, Non-AF, sesi terakhir, dan status sistem.
+- Manajemen pasien.
+- Riwayat sesi rekaman EKG.
+- Detail sesi rekaman dengan grafik:
+  - Raw signal
+  - Filtered signal
+  - R-peaks
+  - BPM
+  - RR interval
+- Monitoring service dan alat EKG.
+- Seeder data CSV EKG:
+  - `Anarianti`
+  - `Wahyu Saputra`
+- Command import CSV manual.
+- MQTT listener command untuk integrasi alat.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Kebutuhan Sistem
 
-## Learning Laravel
+- PHP `8.2` atau lebih baru.
+- Composer.
+- MySQL atau MariaDB.
+- Node.js dan npm, jika ingin build asset Vite.
+- Ekstensi PHP umum Laravel:
+  - `pdo_mysql`
+  - `openssl`
+  - `mbstring`
+  - `tokenizer`
+  - `xml`
+  - `ctype`
+  - `json`
+  - `fileinfo`
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+Catatan test: beberapa test memakai SQLite. Jika `pdo_sqlite` tidak tersedia, test tertentu akan otomatis `skipped`.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Struktur Penting
 
-## Laravel Sponsors
+```text
+app/
+  Console/Commands/
+    ImportLegacyEcgCsvCommand.php
+    MqttListenCommand.php
+  Http/Controllers/
+  Models/
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+database/
+  migrations/
+  seeders/
+    DatabaseSeeder.php
+    LegacyEcgCsvSeeder.php
+    data/
+      anarianti_1_rs.csv
+      3w.csv
 
-### Premium Partners
+resources/views/
+  dashboard/
+  patients/
+  recordings/
+  monitoring/
+  devices/
+  users/
+  layouts/
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+routes/
+  web.php
+```
 
-## Contributing
+## Setup Dari Nol
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+1. Clone atau pindahkan folder project ke server/lokal.
 
-## Code of Conduct
+2. Masuk ke folder project:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+cd Ekg-project
+```
 
-## Security Vulnerabilities
+3. Install dependency PHP:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+composer install
+```
 
-## License
+4. Salin file environment:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+cp .env.example .env
+```
+
+Di Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+5. Generate application key:
+
+```bash
+php artisan key:generate
+```
+
+6. Buat database MySQL lokal.
+
+Contoh nama database:
+
+```sql
+CREATE DATABASE ekg_af_local;
+```
+
+7. Sesuaikan `.env`:
+
+```env
+APP_NAME="EKG Monitoring"
+APP_ENV=local
+APP_DEBUG=true
+APP_URL=http://127.0.0.1:8000
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=ekg_af_local
+DB_USERNAME=root
+DB_PASSWORD=
+```
+
+8. Jalankan migration dan seeder:
+
+```bash
+php artisan migrate:fresh --seed
+```
+
+Perintah ini akan:
+
+- Membuat tabel Laravel.
+- Membuat tabel domain EKG.
+- Membuat 3 puskesmas.
+- Membuat user login.
+- Membuat device EKG.
+- Import CSV EKG dari:
+  - `database/seeders/data/anarianti_1_rs.csv`
+  - `database/seeders/data/3w.csv`
+
+9. Jalankan server:
+
+```bash
+php artisan serve --host=127.0.0.1 --port=8000
+```
+
+10. Buka aplikasi:
+
+```text
+http://127.0.0.1:8000
+```
+
+## Akun Login Default
+
+Password semua akun default:
+
+```text
+password
+```
+
+Daftar akun:
+
+```text
+superadmin@ekg.local
+admin1@ekg.local
+admin2@ekg.local
+admin3@ekg.local
+```
+
+Role:
+
+- `superadmin@ekg.local`: akses semua puskesmas.
+- `admin1@ekg.local`: akses Puskesmas 1.
+- `admin2@ekg.local`: akses Puskesmas 2.
+- `admin3@ekg.local`: akses Puskesmas 3.
+
+## Data Seeder EKG
+
+Seeder EKG berada di:
+
+```text
+database/seeders/LegacyEcgCsvSeeder.php
+```
+
+File CSV berada di:
+
+```text
+database/seeders/data/anarianti_1_rs.csv
+database/seeders/data/3w.csv
+```
+
+Data pasien hasil seed:
+
+```text
+Anarianti | 43 | Perempuan
+Wahyu Saputra | 51 | Laki-laki
+```
+
+Seeder akan menyimpan:
+
+- Data pasien.
+- Sesi rekaman.
+- Raw signal.
+- Filtered signal.
+- R-peaks.
+- BPM.
+- RR interval.
+- SDNN sederhana dari RR interval.
+- Prediction sementara `PENDING_MODEL`.
+
+## Import CSV Manual
+
+Selain lewat seeder, data CSV bisa diimport manual:
+
+```bash
+php artisan ekg:import-legacy-csv database/seeders/data/anarianti_1_rs.csv database/seeders/data/3w.csv --replace --sample-rate=360
+```
+
+Opsi penting:
+
+```text
+--replace
+```
+
+Menghapus data pasien dan sesi EKG lokal sebelum import ulang. User, puskesmas, dan device tetap dipertahankan.
+
+## Menjalankan Seeder Saja
+
+Jika database sudah ada dan hanya ingin isi ulang data:
+
+```bash
+php artisan db:seed --force
+```
+
+Jika hanya ingin menjalankan seeder CSV EKG:
+
+```bash
+php artisan db:seed --class=LegacyEcgCsvSeeder --force
+```
+
+## MQTT
+
+Konfigurasi MQTT berada di `.env`:
+
+```env
+MQTT_HOST=160.187.144.147
+MQTT_PORT=1883
+MQTT_CLIENT_ID=ekg-laravel-subscriber
+MQTT_AUTO_CREATE_PATIENT=true
+MQTT_KEEPALIVE=60
+MQTT_CONNECT_TIMEOUT=10
+MQTT_RECONNECT_ATTEMPTS=0
+MQTT_RECONNECT_DELAY=3
+```
+
+Menjalankan listener MQTT:
+
+```bash
+php artisan mqtt:listen
+```
+
+Topic yang digunakan mengikuti konfigurasi device:
+
+```text
+building/subjek
+building/tspt
+building/bpm
+building/RR
+building/rrlokal
+building/hrr
+building/rawdata
+```
+
+## Model AF / Non-AF
+
+Konfigurasi model berada di `.env`:
+
+```env
+EKG_PYTHON_BIN=python
+AF_MODEL_PATH=storage/app/models/best_model.pkl
+AF_PREDICT_SCRIPT=scripts/predict_af.py
+EKG_HRV_SCRIPT=scripts/extract_hrv.py
+EKG_SAMPLE_RATE=250
+```
+
+Jika model belum tersedia atau belum kompatibel, aplikasi akan menampilkan prediksi sebagai:
+
+```text
+PENDING_MODEL
+```
+
+## Grafik EKG
+
+Grafik EKG saat ini dibuat menyerupai ECG viewer lama:
+
+- Raw signal: abu-abu.
+- Filtered signal: biru.
+- R-peaks: marker segitiga merah.
+- Axis X: waktu dalam detik.
+- Axis Y: amplitude.
+- Mendukung horizontal scroll untuk sinyal panjang.
+
+Grafik digunakan di:
+
+- Dashboard.
+- Detail pasien.
+- Detail sesi rekaman.
+
+## Command Umum
+
+Membersihkan cache:
+
+```bash
+php artisan optimize:clear
+```
+
+Cache view:
+
+```bash
+php artisan view:cache
+```
+
+Menjalankan test:
+
+```bash
+php artisan test
+```
+
+Build asset frontend:
+
+```bash
+npm install
+npm run build
+```
+
+Untuk development Vite:
+
+```bash
+npm run dev
+```
+
+## Setup Cepat Untuk Pindah Komputer
+
+Urutan paling praktis:
+
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate:fresh --seed
+php artisan serve --host=127.0.0.1 --port=8000
+```
+
+Di Windows PowerShell:
+
+```powershell
+composer install
+Copy-Item .env.example .env
+php artisan key:generate
+php artisan migrate:fresh --seed
+php artisan serve --host=127.0.0.1 --port=8000
+```
+
+Pastikan database di `.env` sudah dibuat terlebih dahulu.
+
+## Catatan Penting
+
+- Database VPS tidak perlu disentuh untuk development lokal.
+- Data CSV contoh sudah ikut repo, sehingga seeder bisa jalan di tempat baru.
+- Jangan jalankan `migrate:fresh --seed` di VPS produksi tanpa backup, karena command tersebut menghapus ulang tabel.
+- Untuk produksi, gunakan migration biasa:
+
+```bash
+php artisan migrate --force
+```
+
+Lalu seed hanya jika memang diperlukan:
+
+```bash
+php artisan db:seed --force
+```
