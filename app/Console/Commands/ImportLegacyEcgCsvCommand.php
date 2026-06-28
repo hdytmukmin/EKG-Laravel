@@ -211,6 +211,69 @@ class ImportLegacyEcgCsvCommand extends Command
                 'gender' => 'Laki-laki',
                 'address' => 'Jl. Cendana No. 8, Pekanbaru',
             ],
+            'ecg_lead_ii_filtered_bismil' => [
+                'subject' => 'BISMIL-001',
+                'name' => 'Bismil',
+                'age' => 46,
+                'gender' => 'Laki-laki',
+                'address' => 'Jl. Rajawali No. 14, Pekanbaru',
+            ],
+            'ecg_lead_ii_filtered_ana_rianti' => [
+                'subject' => 'ANA-RIANTI-002',
+                'name' => 'Ana Rianti',
+                'age' => 43,
+                'gender' => 'Perempuan',
+                'address' => 'Jl. Melati No. 12, Pekanbaru',
+            ],
+            'ecg_lead_ii_filtered_budi' => [
+                'subject' => 'BUDI-003',
+                'name' => 'Budi Santoso',
+                'age' => 55,
+                'gender' => 'Laki-laki',
+                'address' => 'Jl. Kenanga No. 5, Pekanbaru',
+            ],
+            'ecg_lead_ii_filtered_ismail' => [
+                'subject' => 'ISMAIL-004',
+                'name' => 'Ismail',
+                'age' => 49,
+                'gender' => 'Laki-laki',
+                'address' => 'Jl. Durian No. 21, Pekanbaru',
+            ],
+            'ecg_lead_ii_filtered_junaidi' => [
+                'subject' => 'JUNAIDI-005',
+                'name' => 'Junaidi',
+                'age' => 57,
+                'gender' => 'Laki-laki',
+                'address' => 'Jl. Teratai No. 9, Pekanbaru',
+            ],
+            'ecg_lead_ii_filtered_maisir' => [
+                'subject' => 'MAISIR-006',
+                'name' => 'Maisir',
+                'age' => 52,
+                'gender' => 'Laki-laki',
+                'address' => 'Jl. Nangka No. 18, Pekanbaru',
+            ],
+            'ecg_lead_ii_filtered_marjohan' => [
+                'subject' => 'MARJOHAN-007',
+                'name' => 'Marjohan',
+                'age' => 60,
+                'gender' => 'Laki-laki',
+                'address' => 'Jl. Seroja No. 7, Pekanbaru',
+            ],
+            'ecg_lead_ii_filtered_susanto' => [
+                'subject' => 'SUSANTO-008',
+                'name' => 'Susanto',
+                'age' => 54,
+                'gender' => 'Laki-laki',
+                'address' => 'Jl. Anggrek No. 10, Pekanbaru',
+            ],
+            'ecg_lead_ii_filtered_tusyatin' => [
+                'subject' => 'TUSYATIN-009',
+                'name' => 'Tusyatin',
+                'age' => 58,
+                'gender' => 'Perempuan',
+                'address' => 'Jl. Flamboyan No. 16, Pekanbaru',
+            ],
         ];
 
         return $knownPatients[$filename] ?? [
@@ -253,19 +316,22 @@ class ImportLegacyEcgCsvCommand extends Command
      */
     private function detectRPeaks(array $filtered, int $sampleRate): array
     {
-        $max = max($filtered);
-        $threshold = max($max * 0.18, 0.03);
+        $maxAbs = max(array_map(fn (float $value): float => abs($value), $filtered));
+        $threshold = max($maxAbs * 0.18, 0.03);
         $minDistance = (int) round($sampleRate * 0.32);
         $peaks = [];
         $lastPeak = -$minDistance;
 
         $count = count($filtered);
         for ($i = 2; $i < $count - 2; $i++) {
-            if ($filtered[$i] < $threshold || $i - $lastPeak < $minDistance) {
+            if (abs($filtered[$i]) < $threshold || $i - $lastPeak < $minDistance) {
                 continue;
             }
 
-            if ($filtered[$i] >= $filtered[$i - 1] && $filtered[$i] >= $filtered[$i + 1]) {
+            $isPositivePeak = $filtered[$i] >= $filtered[$i - 1] && $filtered[$i] >= $filtered[$i + 1];
+            $isNegativePeak = $filtered[$i] <= $filtered[$i - 1] && $filtered[$i] <= $filtered[$i + 1];
+
+            if ($isPositivePeak || $isNegativePeak) {
                 $peaks[] = $i;
                 $lastPeak = $i;
             }

@@ -12,15 +12,37 @@ class LegacyEcgCsvSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->importCsv([
+            database_path('seeders/data/anarianti_1_rs.csv'),
+            database_path('seeders/data/3w.csv'),
+        ], true, 360, 'EKG-LEGACY-001');
+
+        $this->importCsv([
+            database_path('seeders/data/ecg_lead_ii_filtered_bismil.csv'),
+            database_path('seeders/data/ecg_lead_ii_filtered_ana_rianti.csv'),
+            database_path('seeders/data/ecg_lead_ii_filtered_budi.csv'),
+            database_path('seeders/data/ecg_lead_ii_filtered_ismail.csv'),
+            database_path('seeders/data/ecg_lead_ii_filtered_junaidi.csv'),
+            database_path('seeders/data/ecg_lead_ii_filtered_maisir.csv'),
+            database_path('seeders/data/ecg_lead_ii_filtered_marjohan.csv'),
+            database_path('seeders/data/ecg_lead_ii_filtered_susanto.csv'),
+            database_path('seeders/data/ecg_lead_ii_filtered_tusyatin.csv'),
+        ], false, 1000, 'EKG-EXCEL-001');
+    }
+
+    /**
+     * @param  list<string>  $files
+     */
+    private function importCsv(array $files, bool $replace, int $sampleRate, string $deviceUid): void
+    {
         Artisan::call('ekg:import-legacy-csv', [
             'files' => [
-                database_path('seeders/data/anarianti_1_rs.csv'),
-                database_path('seeders/data/3w.csv'),
+                ...$files,
             ],
-            '--replace' => true,
-            '--sample-rate' => 360,
+            '--replace' => $replace,
+            '--sample-rate' => $sampleRate,
             '--puskesmas-code' => 'PKM-001',
-            '--device-uid' => 'EKG-LEGACY-001',
+            '--device-uid' => $deviceUid,
         ]);
 
         $this->command?->line(Artisan::output());

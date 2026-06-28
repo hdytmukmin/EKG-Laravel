@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\EkgFeature;
 use Illuminate\Support\Facades\Process;
+use Throwable;
 
 class AfClassificationService
 {
@@ -42,14 +43,18 @@ class AfClassificationService
             }
         }
 
-        $result = Process::timeout(20)->run([
-            $python,
-            $scriptPath,
-            '--model',
-            $modelPath,
-            '--features-json',
-            json_encode($features, JSON_THROW_ON_ERROR),
-        ]);
+        try {
+            $result = Process::timeout((int) env('EKG_PREDICTION_TIMEOUT', 60))->run([
+                $python,
+                $scriptPath,
+                '--model',
+                $modelPath,
+                '--features-json',
+                json_encode($features, JSON_THROW_ON_ERROR),
+            ]);
+        } catch (Throwable $exception) {
+            return $this->pending(basename($modelPath), $exception->getMessage());
+        }
 
         $decoded = json_decode($result->output(), true);
         if (! $result->successful() || ! is_array($decoded) || isset($decoded['error'])) {
