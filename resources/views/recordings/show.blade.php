@@ -59,7 +59,7 @@
             <div class="panel mb-4">
                 <div class="panel-header">
                     <h2 class="h5 fw-bold mb-0">Grafik BPM</h2>
-                    <span class="badge text-bg-light">{{ count($heartRate) }} titik</span>
+                    <span class="badge text-bg-light">{{ max(count($heartRate), max(count($rPeaks) - 1, 0)) }} titik</span>
                 </div>
                 <div class="panel-body">
                     <div class="chart-box"><canvas id="bpmChart"></canvas></div>
@@ -117,38 +117,87 @@
 
 @push('scripts')
 <script>
-    const heartRate = @json(array_values($heartRate));
+    const storedHeartRate = @json(array_values($heartRate));
     const rawSignal = @json(array_values($rawSignal));
     const filteredSignal = @json(array_values($filteredSignal));
     const rPeaks = @json(array_values($rPeaks));
     const sampleRate = @json($sampleRate);
-    const rrValue = @json($feature?->rr);
-    const rrSeries = heartRate.length ? heartRate.map(() => rrValue) : [rrValue];
+    const featureBpm = @json($feature?->bpm);
+    const featureRr = @json($feature?->rr);
 
-    function lineChart(id, label, values, color, fill = false) {
+    function rrPointsFromPeaks(rPeakIndices, sampleRate) {
+        const points = [];
+        for (let index = 1; index < rPeakIndices.length; index++) {
+            const rr = (rPeakIndices[index] - rPeakIndices[index - 1]) / sampleRate;
+            if (Number.isFinite(rr) && rr > 0) {
+                points.push({ x: rPeakIndices[index] / sampleRate, y: rr });
+            }
+        }
+        return points;
+    }
+
+    function bpmPointsFromDatabase(storedHeartRate, rPeakIndices, sampleRate, fallbackBpm) {
+        const rrPoints = rrPointsFromPeaks(rPeakIndices, sampleRate);
+        if (rrPoints.length) {
+            return rrPoints.map(point => ({ x: point.x, y: 60 / point.y }));
+        }
+
+        if (storedHeartRate.length) {
+            return storedHeartRate
+                .map((value, index) => ({ x: index + 1, y: Number(value) }))
+                .filter(point => Number.isFinite(point.y));
+        }
+
+        return Number.isFinite(Number(fallbackBpm)) && Number(fallbackBpm) >= 0
+            ? [{ x: 1, y: Number(fallbackBpm) }]
+            : [];
+    }
+
+    function rrPointsFromDatabase(rPeakIndices, sampleRate, fallbackRr) {
+        const rrPoints = rrPointsFromPeaks(rPeakIndices, sampleRate);
+        if (rrPoints.length) {
+            return rrPoints;
+        }
+
+        return Number.isFinite(Number(fallbackRr)) && Number(fallbackRr) >= 0
+            ? [{ x: 1, y: Number(fallbackRr) }]
+            : [];
+    }
+
+    function lineChart(id, label, points, color, fill = false, yTitle = '') {
         const ctx = document.getElementById(id);
         if (!ctx) return;
         new Chart(ctx, {
             type: 'line',
             data: {
-                labels: values.map((_, index) => index + 1),
                 datasets: [{
                     label,
-                    data: values,
+                    data: points,
                     borderColor: color,
                     backgroundColor: fill ? color.replace('1)', '.12)') : 'transparent',
                     fill,
                     tension: .22,
-                    pointRadius: values.length > 250 ? 0 : 2,
+                    pointRadius: points.length > 250 ? 0 : 3,
                     borderWidth: 1.5
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                animation: values.length < 1200,
+                animation: points.length < 1200,
+                parsing: false,
                 plugins: { legend: { display: false } },
-                scales: { x: { grid: { display: false } }, y: { grid: { color: '#e5eef3' } } }
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: points.some(point => point.x > 10) ? 'Waktu (s)' : 'Beat' },
+                        grid: { display: false }
+                    },
+                    y: {
+                        title: { display: Boolean(yTitle), text: yTitle },
+                        grid: { color: '#e5eef3' }
+                    }
+                }
             }
         });
     }
@@ -237,8 +286,11 @@
         });
     }
 
-    lineChart('bpmChart', 'BPM', heartRate, 'rgba(10, 132, 193, 1)', true);
-    lineChart('rrChart', 'RR Interval', rrSeries, 'rgba(25, 135, 84, 1)', false);
+    const bpmPoints = bpmPointsFromDatabase(storedHeartRate, rPeaks, sampleRate, featureBpm);
+    const rrPoints = rrPointsFromDatabase(rPeaks, sampleRate, featureRr);
+
+    lineChart('bpmChart', 'BPM', bpmPoints, 'rgba(10, 132, 193, 1)', true, 'BPM');
+    lineChart('rrChart', 'RR Interval', rrPoints, 'rgba(25, 135, 84, 1)', false, 'RR (s)');
     createEcgViewerChart('rawChart', rawSignal, filteredSignal, rPeaks, sampleRate);
 </script>
 @endpush

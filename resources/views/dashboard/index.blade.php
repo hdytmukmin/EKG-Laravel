@@ -215,6 +215,28 @@
     const comparisonAf = @json($dashboard['comparison_af']);
     const comparisonNonAf = @json($dashboard['comparison_non_af']);
 
+    function rrPointsFromPeaks(rPeakIndices, sampleRate) {
+        const points = [];
+        for (let index = 1; index < rPeakIndices.length; index++) {
+            const rr = (rPeakIndices[index] - rPeakIndices[index - 1]) / sampleRate;
+            if (Number.isFinite(rr) && rr > 0) {
+                points.push({ x: rPeakIndices[index] / sampleRate, y: rr });
+            }
+        }
+        return points;
+    }
+
+    function bpmPointsFromDatabase(storedHeartRate, rPeakIndices, sampleRate) {
+        const rrPoints = rrPointsFromPeaks(rPeakIndices, sampleRate);
+        if (rrPoints.length) {
+            return rrPoints.map(point => ({ x: point.x, y: 60 / point.y }));
+        }
+
+        return storedHeartRate
+            .map((value, index) => ({ x: index + 1, y: Number(value) }))
+            .filter(point => Number.isFinite(point.y));
+    }
+
     function secondsLabel(value) {
         return `${Number(value).toFixed(1)}s`;
     }
@@ -301,24 +323,32 @@
 
     const bpmCtx = document.getElementById('bpmChart');
     if (bpmCtx) {
+        const bpmPoints = bpmPointsFromDatabase(latestHeartRate, latestRPeaks, latestSampleRate);
         new Chart(bpmCtx, {
             type: 'line',
             data: {
-                labels: latestHeartRate.map((_, index) => index + 1),
                 datasets: [{
                     label: 'BPM',
-                    data: latestHeartRate,
+                    data: bpmPoints,
                     borderColor: '#0a84c1',
                     backgroundColor: 'rgba(10, 132, 193, .12)',
                     fill: true,
                     tension: .32,
-                    pointRadius: latestHeartRate.length > 250 ? 0 : 3
+                    pointRadius: bpmPoints.length > 250 ? 0 : 3
                 }]
             },
             options: {
                 maintainAspectRatio: false,
+                parsing: false,
                 plugins: { legend: { display: false } },
-                scales: { y: { beginAtZero: true, grid: { color: '#e5eef3' } }, x: { grid: { display: false } } }
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: { display: true, text: bpmPoints.some(point => point.x > 10) ? 'Waktu (s)' : 'Beat' },
+                        grid: { display: false }
+                    },
+                    y: { beginAtZero: true, title: { display: true, text: 'BPM' }, grid: { color: '#e5eef3' } }
+                }
             }
         });
     }

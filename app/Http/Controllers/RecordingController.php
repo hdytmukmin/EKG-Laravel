@@ -98,12 +98,46 @@ class RecordingController extends Controller
 
         $heartRate = $recording->feature?->heart_rate ?? [];
         $raw = $recording->rawSignal?->voltage_values ?? [];
+        $filtered = $recording->rawSignal?->filtered_values ?? [];
+        $rPeaks = $recording->rawSignal?->r_peak_indices ?? [];
+        $sampleRate = $recording->rawSignal?->sample_rate ?: 360;
+        $rrSeries = $this->rrSeriesFromPeaks($rPeaks, $sampleRate);
+        $bpmSeries = $rrSeries
+            ? array_map(fn (array $point) => ['x' => $point['x'], 'y' => $point['y'] > 0 ? 60 / $point['y'] : null], $rrSeries)
+            : array_values($heartRate);
+
+        if (! $rrSeries && $recording->feature?->rr !== null) {
+            $rrSeries = [['x' => 1, 'y' => (float) $recording->feature->rr]];
+        }
+
+        if (! $bpmSeries && $recording->feature?->bpm !== null) {
+            $bpmSeries = [['x' => 1, 'y' => (float) $recording->feature->bpm]];
+        }
 
         return response()->json([
-            'heart_rate' => array_values($heartRate),
-            'rr' => array_fill(0, max(count($heartRate), 1), $recording->feature?->rr),
+            'heart_rate' => $bpmSeries,
+            'rr' => $rrSeries,
             'raw_signal' => array_values($raw),
-            'sample_rate' => $recording->rawSignal?->sample_rate,
+            'filtered_signal' => array_values($filtered),
+            'r_peaks' => array_values($rPeaks),
+            'sample_rate' => $sampleRate,
         ]);
+    }
+
+    private function rrSeriesFromPeaks(array $rPeaks, int $sampleRate): array
+    {
+        $series = [];
+
+        for ($index = 1; $index < count($rPeaks); $index++) {
+            $rr = ($rPeaks[$index] - $rPeaks[$index - 1]) / $sampleRate;
+            if ($rr > 0) {
+                $series[] = [
+                    'x' => $rPeaks[$index] / $sampleRate,
+                    'y' => $rr,
+                ];
+            }
+        }
+
+        return $series;
     }
 }

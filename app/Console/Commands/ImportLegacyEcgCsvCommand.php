@@ -66,10 +66,12 @@ class ImportLegacyEcgCsvCommand extends Command
             $filtered = $this->baselineFiltered($values, (int) round($sampleRate * 0.22), 0.42);
             $rPeaks = $this->detectRPeaks($filtered, $sampleRate);
             $rrIntervals = $this->rrIntervals($rPeaks, $sampleRate);
-            $bpm = $this->bpmFromRr($rrIntervals);
+            $bpm = $this->bpmFromRr($rrIntervals) ?? 0.0;
             $heartRate = $this->heartRateSeries($rrIntervals);
             $sdnn = $this->sdnn($rrIntervals);
             $rmssd = $this->rmssd($rrIntervals);
+            $rrMean = $rrIntervals ? array_sum($rrIntervals) / count($rrIntervals) : 0.0;
+            $rrLocal = $rrIntervals ? end($rrIntervals) : 0.0;
 
             $patient = Patient::query()->updateOrCreate(
                 [
@@ -99,8 +101,8 @@ class ImportLegacyEcgCsvCommand extends Command
                 'subject' => $subject,
                 'interval_pt' => null,
                 'bpm' => $bpm,
-                'rr' => $rrIntervals ? array_sum($rrIntervals) / count($rrIntervals) : null,
-                'rr_lokal' => $rrIntervals ? end($rrIntervals) : null,
+                'rr' => $rrMean,
+                'rr_lokal' => $rrLocal,
                 'status' => 'legacy_csv',
                 'sdnn' => $sdnn,
                 'sns' => $rmssd,
@@ -316,22 +318,25 @@ class ImportLegacyEcgCsvCommand extends Command
      */
     private function detectRPeaks(array $filtered, int $sampleRate): array
     {
-        $maxAbs = max(array_map(fn (float $value): float => abs($value), $filtered));
-        $threshold = max($maxAbs * 0.18, 0.03);
+        $max = max($filtered);
+        $min = min($filtered);
+        $detectNegative = abs($min) > ($max * 1.2);
+        $threshold = max(($detectNegative ? abs($min) : $max) * 0.18, 0.03);
         $minDistance = (int) round($sampleRate * 0.32);
         $peaks = [];
         $lastPeak = -$minDistance;
 
         $count = count($filtered);
         for ($i = 2; $i < $count - 2; $i++) {
-            if (abs($filtered[$i]) < $threshold || $i - $lastPeak < $minDistance) {
+            $magnitude = $detectNegative ? abs($filtered[$i]) : $filtered[$i];
+            if ($magnitude < $threshold || $i - $lastPeak < $minDistance) {
                 continue;
             }
 
             $isPositivePeak = $filtered[$i] >= $filtered[$i - 1] && $filtered[$i] >= $filtered[$i + 1];
             $isNegativePeak = $filtered[$i] <= $filtered[$i - 1] && $filtered[$i] <= $filtered[$i + 1];
 
-            if ($isPositivePeak || $isNegativePeak) {
+            if ((! $detectNegative && $isPositivePeak) || ($detectNegative && $isNegativePeak)) {
                 $peaks[] = $i;
                 $lastPeak = $i;
             }
@@ -383,7 +388,7 @@ class ImportLegacyEcgCsvCommand extends Command
     private function sdnn(array $rrIntervals): ?float
     {
         if (count($rrIntervals) < 2) {
-            return null;
+            return 0.0;
         }
 
         $mean = array_sum($rrIntervals) / count($rrIntervals);
@@ -398,7 +403,7 @@ class ImportLegacyEcgCsvCommand extends Command
     private function rmssd(array $rrIntervals): ?float
     {
         if (count($rrIntervals) < 2) {
-            return null;
+            return 0.0;
         }
 
         $squares = [];
