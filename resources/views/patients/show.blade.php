@@ -32,6 +32,27 @@
                         <dt class="col-5 text-secondary">Gender</dt><dd class="col-7">{{ $patient->gender ?? '-' }}</dd>
                         <dt class="col-5 text-secondary">Alamat</dt><dd class="col-7">{{ $patient->address ?? '-' }}</dd>
                     </dl>
+
+                    <form method="POST" action="{{ route('patients.upload', $patient) }}" enctype="multipart/form-data" class="mt-4 pt-4 border-top">
+                        @csrf
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" for="ekg_file">Import CSV EKG</label>
+                            <input class="form-control @error('file') is-invalid @enderror" type="file" id="ekg_file" name="file" accept=".csv,.txt" required>
+                            @error('file')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold" for="sample_rate">Sample Rate (Hz)</label>
+                            <input class="form-control @error('sample_rate') is-invalid @enderror" type="number" id="sample_rate" name="sample_rate" min="1" max="5000" value="{{ old('sample_rate', 360) }}">
+                            @error('sample_rate')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <button class="btn btn-primary w-100" type="submit">
+                            <i class="bi bi-upload me-2"></i>Import CSV
+                        </button>
+                    </form>
                 </div>
             </div>
         </div>

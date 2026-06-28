@@ -8,7 +8,7 @@ use App\Models\Patient;
 use App\Models\Prediction;
 use App\Models\RecordingSession;
 use App\Services\AfClassificationService;
-use App\Services\SdnnSnsExtractorService;
+use App\Services\EcgSignalProcessingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
@@ -18,17 +18,25 @@ class UploadController extends Controller
     public function store(
         Request $request,
         Patient $patient,
-        SdnnSnsExtractorService $extractor,
+        EcgSignalProcessingService $processor,
         AfClassificationService $classifier
     ) {
         $request->validate([
-            'file' => ['required', 'file', 'mimes:csv,txt', 'max:5120'],
+            'file' => ['required', 'file', 'mimes:csv,txt', 'max:20480'],
+            'sample_rate' => ['nullable', 'integer', 'min:1', 'max:5000'],
         ]);
 
         try {
             $patient = Patient::query()->visibleTo($request->user())->findOrFail($patient->id);
+            $sampleRate = (int) $request->input('sample_rate', 360);
             $path = $request->file('file')->storeAs('ekg-uploads', 'ekg-'.$patient->id.'-'.time().'.csv');
             $rawValues = $this->readNumericCsvValues(Storage::path($path));
+
+            if (count($rawValues) < 2) {
+                throw new \RuntimeException('File CSV tidak memiliki data numerik EKG yang cukup.');
+            }
+
+            $processed = $processor->process($rawValues, $sampleRate);
 
             $session = RecordingSession::create([
                 'puskesmas_id' => $patient->puskesmas_id,
@@ -41,19 +49,24 @@ class UploadController extends Controller
 
             EkgRawSignal::create([
                 'recording_session_id' => $session->id,
-                'voltage_values' => $rawValues,
-                'sample_rate' => null,
+                'voltage_values' => $processor->roundSeries($rawValues, 6),
+                'filtered_values' => $processed['filtered_values'],
+                'r_peak_indices' => $processed['r_peak_indices'],
+                'sample_rate' => $sampleRate,
                 'total_samples' => count($rawValues),
             ]);
 
-            $extracted = $extractor->extract($rawValues);
             $feature = EkgFeature::create([
                 'recording_session_id' => $session->id,
                 'subject' => $patient->name,
+                'interval_pt' => null,
+                'bpm' => $processed['bpm'],
+                'rr' => $processed['rr'],
+                'rr_lokal' => $processed['rr_lokal'],
                 'status' => 'uploaded',
-                'sdnn' => $extracted['sdnn'],
-                'sns' => $extracted['sns'],
-                'heart_rate' => [],
+                'sdnn' => $processed['sdnn'],
+                'sns' => $processed['sns'],
+                'heart_rate' => $processed['heart_rate'],
             ]);
 
             $prediction = $classifier->classify($feature);
