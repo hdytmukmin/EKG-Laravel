@@ -13,6 +13,8 @@ use Illuminate\Http\Request;
 
 class RecordingController extends Controller
 {
+    private const AF_LABELS = ['AF', 'PERSISTENT_AF', 'PAROXYSMAL_AF'];
+
     public function index(Request $request)
     {
         try {
@@ -38,7 +40,13 @@ class RecordingController extends Controller
                     });
                 })
                 ->when($request->filled('status'), fn ($query) => $query->where('status', $request->query('status')))
-                ->when($request->filled('prediction'), fn ($query) => $query->whereHas('prediction', fn ($prediction) => $prediction->where('label', $request->query('prediction'))))
+                ->when($request->filled('prediction'), function ($query) use ($request) {
+                    $predictionLabel = $request->query('prediction');
+
+                    $query->whereHas('prediction', fn ($prediction) => $predictionLabel === 'AF'
+                        ? $prediction->whereIn('label', self::AF_LABELS)
+                        : $prediction->where('label', $predictionLabel));
+                })
                 ->latest('recorded_at');
 
             $sessions = $query
@@ -48,7 +56,7 @@ class RecordingController extends Controller
             $base = (clone $query)->reorder();
             $summary = [
                 'total_sessions' => (clone $base)->count(),
-                'total_af' => (clone $base)->whereHas('prediction', fn ($prediction) => $prediction->where('label', 'AF'))->count(),
+                'total_af' => (clone $base)->whereHas('prediction', fn ($prediction) => $prediction->whereIn('label', self::AF_LABELS))->count(),
                 'total_non_af' => (clone $base)->whereHas('prediction', fn ($prediction) => $prediction->where('label', 'NON_AF'))->count(),
             ];
 

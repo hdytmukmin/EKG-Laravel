@@ -14,6 +14,13 @@
     @php($sampleRate = $recording->rawSignal?->sample_rate ?? 360)
     @php($duration = count($rawSignal) / max($sampleRate, 1))
     @php($ekgWidth = min(max((int) ceil($duration * 220), 1100), 30000))
+    @php($predictionText = match ($prediction?->label) {
+        'PERSISTENT_AF' => 'Persistent AF',
+        'PAROXYSMAL_AF' => 'Paroxysmal AF',
+        'NON_AF' => 'Non-AF',
+        'PENDING_MODEL' => 'Belum tersedia',
+        default => $prediction?->label ?? '-',
+    })
 
     <div class="row g-3 mb-4">
         <div class="col-12 col-md-3">
@@ -47,7 +54,7 @@
             <div class="stat-card">
                 <div>
                     <div class="stat-label">Prediksi</div>
-                    <div class="fw-bold fs-5">{{ $prediction?->label === 'PENDING_MODEL' ? 'Belum tersedia' : ($prediction?->label ?? '-') }}</div>
+                    <div class="fw-bold fs-5">{{ $predictionText }}</div>
                 </div>
                 <div class="stat-icon"><i class="bi bi-clipboard2-pulse fs-4"></i></div>
             </div>

@@ -9,8 +9,8 @@ use App\Models\Patient;
 use App\Models\Prediction;
 use App\Models\Puskesmas;
 use App\Models\RecordingSession;
-use App\Services\AfClassificationService;
-use App\Services\SdnnSnsExtractorService;
+use App\Services\DeepLearningEcgClassificationService;
+use App\Services\EcgSignalProcessingService;
 use Illuminate\Console\Command;
 use PhpMqtt\Client\ConnectionSettings;
 use PhpMqtt\Client\MqttClient;
@@ -32,11 +32,11 @@ class MqttListenCommand extends Command
         'building/rawdata' => 'raw_signal',
     ];
 
-    private const REQUIRED_FIELDS = ['subject', 'interval_pt', 'bpm', 'rr', 'rr_lokal', 'heart_rate'];
+    private const REQUIRED_FIELDS = ['subject', 'interval_pt', 'bpm', 'rr', 'rr_lokal', 'heart_rate', 'raw_signal'];
 
     private array $buffer = [];
 
-    public function handle(SdnnSnsExtractorService $extractor, AfClassificationService $classifier): int
+    public function handle(EcgSignalProcessingService $processor, DeepLearningEcgClassificationService $classifier): int
     {
         $host = (string) env('MQTT_HOST', '160.187.144.147');
         $port = (int) env('MQTT_PORT', 1883);
@@ -64,8 +64,8 @@ class MqttListenCommand extends Command
             $mqtt->connect($settings, true);
 
             foreach (self::TOPIC_TO_FIELD as $topic => $field) {
-                $mqtt->subscribe($topic, function (string $topic, string $message) use ($mqtt, $extractor, $classifier): void {
-                    $this->handleMessage($topic, $message, $extractor, $classifier);
+                $mqtt->subscribe($topic, function (string $topic, string $message) use ($mqtt, $processor, $classifier): void {
+                    $this->handleMessage($topic, $message, $processor, $classifier);
 
                     if ($this->option('once') && empty($this->buffer)) {
                         $mqtt->interrupt();
@@ -94,8 +94,8 @@ class MqttListenCommand extends Command
     private function handleMessage(
         string $topic,
         string $message,
-        SdnnSnsExtractorService $extractor,
-        AfClassificationService $classifier
+        EcgSignalProcessingService $processor,
+        DeepLearningEcgClassificationService $classifier
     ): void {
         $field = self::TOPIC_TO_FIELD[$topic] ?? null;
         if ($field === null) {
@@ -144,7 +144,8 @@ class MqttListenCommand extends Command
             'source' => 'mqtt',
         ]);
 
-        $extracted = $extractor->extract($payload['raw_signal']);
+        $sampleRate = (int) env('EKG_SAMPLE_RATE', 0) ?: 200;
+        $processed = $processor->process($payload['raw_signal'], $sampleRate);
         $feature = EkgFeature::create([
             'recording_session_id' => $session->id,
             'subject' => $payload['subject'],
@@ -153,21 +154,23 @@ class MqttListenCommand extends Command
             'rr' => $payload['rr'],
             'rr_lokal' => $payload['rr_lokal'],
             'status' => $payload['status'],
-            'sdnn' => $extracted['sdnn'],
-            'sns' => $extracted['sns'],
-            'heart_rate' => $payload['heart_rate'],
+            'sdnn' => $processed['sdnn'],
+            'sns' => $processed['sns'],
+            'heart_rate' => $payload['heart_rate'] ?: $processed['heart_rate'],
         ]);
 
         if ($payload['raw_signal'] !== []) {
             EkgRawSignal::create([
                 'recording_session_id' => $session->id,
-                'voltage_values' => $payload['raw_signal'],
-                'sample_rate' => (int) env('EKG_SAMPLE_RATE', 0) ?: null,
+                'voltage_values' => $processor->roundSeries($payload['raw_signal'], 6),
+                'filtered_values' => $processed['filtered_values'],
+                'r_peak_indices' => $processed['r_peak_indices'],
+                'sample_rate' => $sampleRate,
                 'total_samples' => count($payload['raw_signal']),
             ]);
         }
 
-        $prediction = $classifier->classify($feature);
+        $prediction = $classifier->classify($payload['raw_signal'], $sampleRate);
         Prediction::create([
             'recording_session_id' => $session->id,
             'label' => $prediction['label'],

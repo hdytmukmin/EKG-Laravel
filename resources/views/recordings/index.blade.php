@@ -99,6 +99,8 @@
                     <select name="prediction" class="form-select">
                         <option value="">Semua</option>
                         <option value="AF" @selected(request('prediction') === 'AF')>AF</option>
+                        <option value="PERSISTENT_AF" @selected(request('prediction') === 'PERSISTENT_AF')>Persistent AF</option>
+                        <option value="PAROXYSMAL_AF" @selected(request('prediction') === 'PAROXYSMAL_AF')>Paroxysmal AF</option>
                         <option value="NON_AF" @selected(request('prediction') === 'NON_AF')>Non-AF</option>
                         <option value="PENDING_MODEL" @selected(request('prediction') === 'PENDING_MODEL')>Pending</option>
                     </select>

@@ -14,11 +14,20 @@
         </thead>
         <tbody>
             @forelse ($sessions as $session)
+                @php($afLabels = ['AF', 'PERSISTENT_AF', 'PAROXYSMAL_AF'])
+                @php($predictionLabel = $session->prediction?->label)
+                @php($isAf = in_array($predictionLabel, $afLabels, true))
+                @php($predictionText = match ($predictionLabel) {
+                    'PERSISTENT_AF' => 'Persistent AF',
+                    'PAROXYSMAL_AF' => 'Paroxysmal AF',
+                    'NON_AF' => 'Non-AF',
+                    default => $predictionLabel ?? 'PENDING',
+                })
                 <tr>
                     <td>#{{ $session->id }}</td>
                     <td>
                         <div class="entity-cell">
-                            <div class="entity-avatar {{ $session->prediction?->label === 'AF' ? 'danger' : ($session->prediction?->label === 'NON_AF' ? 'success' : '') }}">
+                            <div class="entity-avatar {{ $isAf ? 'danger' : ($predictionLabel === 'NON_AF' ? 'success' : '') }}">
                                 <i class="bi bi-heart-pulse"></i>
                             </div>
                             <div>
@@ -30,7 +39,7 @@
                     <td>{{ $session->puskesmas?->name ?? '-' }}</td>
                     <td class="fw-bold">{{ $session->feature?->bpm ?? '-' }}</td>
                     <td>{{ $session->feature?->rr ?? '-' }}</td>
-                    <td><span class="badge {{ $session->prediction?->label === 'AF' ? 'text-bg-danger' : ($session->prediction?->label === 'NON_AF' ? 'text-bg-success' : 'text-bg-secondary') }}">{{ $session->prediction?->label ?? 'PENDING' }}</span></td>
+                    <td><span class="badge {{ $isAf ? 'text-bg-danger' : ($predictionLabel === 'NON_AF' ? 'text-bg-success' : 'text-bg-secondary') }}">{{ $predictionText }}</span></td>
                     <td>{{ $session->recorded_at?->format('Y-m-d H:i') ?? '-' }}</td>
                     <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ route('recordings.show', $session) }}"><i class="bi bi-eye"></i></a></td>
                 </tr>

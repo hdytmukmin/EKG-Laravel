@@ -282,19 +282,34 @@ building/hrr
 building/rawdata
 ```
 
-## Model AF / Non-AF
+## Model Deep Learning EKG
 
 Konfigurasi model berada di `.env`:
 
 ```env
 EKG_PYTHON_BIN=python
-AF_MODEL_PATH=storage/app/models/best_model.pkl
-AF_PREDICT_SCRIPT=scripts/predict_af.py
-EKG_HRV_SCRIPT=scripts/extract_hrv.py
+DL_MODEL_ENABLED=true
+DL_MODEL_DIR=../model/DeployModelEks3
+DL_PREDICT_SCRIPT=scripts/predict_dl_ecg.py
+DL_PREDICTION_TIMEOUT=180
 EKG_SAMPLE_RATE=250
 ```
 
-Jika model belum tersedia atau belum kompatibel, aplikasi akan menampilkan prediksi sebagai:
+Model deep learning menggunakan raw signal EKG langsung melalui `pipeline.py`, sehingga prediksi tidak memakai fitur BPM/RR/SDNN/RMSSD sebagai input model. Fitur klinis tetap disimpan untuk grafik dan ringkasan.
+
+Dependency Python:
+
+```bash
+python -m pip install -r requirements-dl.txt
+```
+
+Rekomendasi environment model:
+
+- Python 3.10, 3.11, atau 3.12.
+- `torch`, `numpy`, `scipy`, dan `neurokit2` terpasang di Python yang sama dengan `EKG_PYTHON_BIN`.
+- Folder `DL_MODEL_DIR` berisi `model.py`, `pipeline.py`, dan `best_dl_modelExp3LSTMTuned.pth`.
+
+Jika model atau dependency belum tersedia, aplikasi akan menampilkan prediksi sebagai:
 
 ```text
 PENDING_MODEL

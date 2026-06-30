@@ -14,6 +14,8 @@ use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
+    private const AF_LABELS = ['AF', 'PERSISTENT_AF', 'PAROXYSMAL_AF'];
+
     public function index(Request $request)
     {
         try {
@@ -55,7 +57,7 @@ class DashboardController extends Controller
 
             $dashboard = [
                 'total_patients' => (clone $patientQuery)->count(),
-                'total_af' => (clone $patientQuery)->whereHas('recordingSessions.prediction', fn ($query) => $query->where('label', 'AF'))->count(),
+                'total_af' => (clone $patientQuery)->whereHas('recordingSessions.prediction', fn ($query) => $query->whereIn('label', self::AF_LABELS))->count(),
                 'total_non_af' => (clone $patientQuery)->whereHas('recordingSessions.prediction', fn ($query) => $query->where('label', 'NON_AF'))->count(),
                 'latest_session' => (clone $sessionQuery)->with(['patient', 'device', 'feature', 'rawSignal', 'prediction'])->latest('recorded_at')->first(),
                 'chart_session' => $chartSession,
@@ -116,7 +118,7 @@ class DashboardController extends Controller
             ->map(function (Puskesmas $puskesmas) {
                 $afPatients = Patient::query()
                     ->where('puskesmas_id', $puskesmas->id)
-                    ->whereHas('recordingSessions.prediction', fn ($query) => $query->where('label', 'AF'))
+                    ->whereHas('recordingSessions.prediction', fn ($query) => $query->whereIn('label', self::AF_LABELS))
                     ->count();
 
                 $nonAfPatients = Patient::query()

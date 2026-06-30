@@ -7,7 +7,7 @@ use App\Models\EkgRawSignal;
 use App\Models\Patient;
 use App\Models\Prediction;
 use App\Models\RecordingSession;
-use App\Services\AfClassificationService;
+use App\Services\DeepLearningEcgClassificationService;
 use App\Services\EcgSignalProcessingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -19,7 +19,7 @@ class UploadController extends Controller
         Request $request,
         Patient $patient,
         EcgSignalProcessingService $processor,
-        AfClassificationService $classifier
+        DeepLearningEcgClassificationService $classifier
     ) {
         $request->validate([
             'file' => ['required', 'file', 'mimes:csv,txt', 'max:20480'],
@@ -69,7 +69,7 @@ class UploadController extends Controller
                 'heart_rate' => $processed['heart_rate'],
             ]);
 
-            $prediction = $classifier->classify($feature);
+            $prediction = $classifier->classify($rawValues, $sampleRate);
             Prediction::create([
                 'recording_session_id' => $session->id,
                 'label' => $prediction['label'],
