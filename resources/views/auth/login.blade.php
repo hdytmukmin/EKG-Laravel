@@ -180,11 +180,11 @@
                 @csrf
                 <div>
                     <label class="form-label">Email</label>
-                    <input type="email" name="email" value="{{ old('email', 'superadmin@ekg.local') }}" class="form-control" required autofocus>
+                    <input type="email" name="email" value="{{ old('email') }}" class="form-control" autocomplete="username" required autofocus>
                 </div>
                 <div>
                     <label class="form-label">Password</label>
-                    <input type="password" name="password" value="password" class="form-control" required>
+                    <input type="password" name="password" class="form-control" autocomplete="current-password" required>
                 </div>
                 <label class="form-check">
                     <input type="checkbox" name="remember" class="form-check-input">

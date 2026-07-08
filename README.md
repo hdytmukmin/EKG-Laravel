@@ -405,3 +405,50 @@ Lalu seed hanya jika memang diperlukan:
 ```bash
 php artisan db:seed --force
 ```
+
+## Sync Database Legacy iot
+
+Jika alat lama masih menulis langsung ke database legacy `iot`, aplikasi Laravel tidak perlu mengubah konfigurasi alat. Gunakan command sync untuk menyalin data legacy ke schema Laravel baru.
+
+Tambahkan konfigurasi legacy database di `.env`:
+
+```env
+LEGACY_DB_CONNECTION=mysql
+LEGACY_DB_HOST=127.0.0.1
+LEGACY_DB_PORT=3306
+LEGACY_DB_DATABASE=iot
+LEGACY_DB_USERNAME=ekg_user
+LEGACY_DB_PASSWORD=your_password
+```
+
+Jalankan migration baru:
+
+```bash
+php artisan migrate --force
+```
+
+Cek data tanpa insert:
+
+```bash
+php artisan ekg:sync-legacy-iot --dry-run --limit=10
+```
+
+Import terbatas:
+
+```bash
+php artisan ekg:sync-legacy-iot --limit=10
+```
+
+Import semua data baru dari `ecg_data` dan `recordekg`:
+
+```bash
+php artisan ekg:sync-legacy-iot --source=all --limit=500
+```
+
+Mode worker untuk server:
+
+```bash
+php artisan ekg:sync-legacy-iot --loop --sleep=5 --limit=100
+```
+
+Command ini hanya membaca database `iot`. Data yang sudah pernah masuk ditandai di tabel `legacy_imports`, sehingga command aman dijalankan berulang tanpa membuat duplikasi berdasarkan `source_table` dan `source_id`.
