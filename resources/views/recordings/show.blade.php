@@ -23,7 +23,7 @@
     })
 
     <div class="row g-3 mb-4">
-        <div class="col-12 col-md-3">
+        <div class="col-12 col-md-4">
             <div class="stat-card">
                 <div>
                     <div class="stat-label">BPM</div>
@@ -32,7 +32,7 @@
                 <div class="stat-icon"><i class="bi bi-heart-pulse fs-4"></i></div>
             </div>
         </div>
-        <div class="col-12 col-md-3">
+        <div class="col-12 col-md-4">
             <div class="stat-card">
                 <div>
                     <div class="stat-label">RR Interval</div>
@@ -41,16 +41,7 @@
                 <div class="stat-icon"><i class="bi bi-soundwave fs-4"></i></div>
             </div>
         </div>
-        <div class="col-12 col-md-3">
-            <div class="stat-card">
-                <div>
-                    <div class="stat-label">Interval PT</div>
-                    <div class="stat-value">{{ $feature?->interval_pt ? number_format($feature->interval_pt, 2) : 0 }}</div>
-                </div>
-                <div class="stat-icon"><i class="bi bi-graph-up fs-4"></i></div>
-            </div>
-        </div>
-        <div class="col-12 col-md-3">
+        <div class="col-12 col-md-4">
             <div class="stat-card">
                 <div>
                     <div class="stat-label">Prediksi</div>
@@ -107,8 +98,6 @@
                         <dt class="col-5 text-secondary">Fasilitas Kesehatan</dt><dd class="col-7">{{ $recording->puskesmas?->name ?? '-' }}</dd>
                         <dt class="col-5 text-secondary">Alat</dt><dd class="col-7">{{ $recording->device?->name ?? '-' }}</dd>
                         <dt class="col-5 text-secondary">Tanggal</dt><dd class="col-7">{{ $recording->recorded_at?->format('Y-m-d H:i:s') ?? '-' }}</dd>
-                        <dt class="col-5 text-secondary">SDNN</dt><dd class="col-7">{{ $feature?->sdnn ?? '-' }}</dd>
-                        <dt class="col-5 text-secondary">SNS</dt><dd class="col-7">{{ $feature?->sns ?? '-' }}</dd>
                     </dl>
                     @if ($prediction?->error_message)
                         <div class="alert alert-warning small mt-3 mb-0">
