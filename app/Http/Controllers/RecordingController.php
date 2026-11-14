@@ -109,6 +109,23 @@ class RecordingController extends Controller
         $filtered = $recording->rawSignal?->filtered_values ?? [];
         $rPeaks = $recording->rawSignal?->r_peak_indices ?? [];
         $sampleRate = $recording->rawSignal?->sample_rate ?: 360;
+        $totalSamples = $recording->rawSignal?->total_samples ?: count($raw);
+        $minimumSamples = max((int) config('ekg.minimum_samples', 5000), 2);
+
+        if ($totalSamples < $minimumSamples) {
+            return response()->json([
+                'heart_rate' => [],
+                'rr' => [],
+                'raw_signal' => [],
+                'filtered_signal' => [],
+                'r_peaks' => [],
+                'sample_rate' => $sampleRate,
+                'total_samples' => $totalSamples,
+                'minimum_samples' => $minimumSamples,
+                'signal_sufficient' => false,
+            ]);
+        }
+
         $rrSeries = $this->rrSeriesFromPeaks($rPeaks, $sampleRate);
         $bpmSeries = $rrSeries
             ? array_map(fn (array $point) => ['x' => $point['x'], 'y' => $point['y'] > 0 ? 60 / $point['y'] : null], $rrSeries)
@@ -129,6 +146,9 @@ class RecordingController extends Controller
             'filtered_signal' => array_values($filtered),
             'r_peaks' => array_values($rPeaks),
             'sample_rate' => $sampleRate,
+            'total_samples' => $totalSamples,
+            'minimum_samples' => $minimumSamples,
+            'signal_sufficient' => true,
         ]);
     }
 

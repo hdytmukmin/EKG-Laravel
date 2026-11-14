@@ -159,6 +159,14 @@
                     <span class="badge text-bg-light">Sesi #<span id="monitoringChartSession">{{ $latest?->id ?? '-' }}</span></span>
                 </div>
                 <div class="panel-body">
+                    <div id="monitoringSignalAlert" class="alert alert-warning d-none align-items-start gap-2" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+                        <div>
+                            <strong>Sinyal EKG belum mencukupi.</strong>
+                            Tersedia <span id="monitoringSignalSamples">0</span> dari minimal <span id="monitoringMinimumSamples">5.000</span> sampel. Data tetap disimpan, tetapi tidak divisualisasikan dan belum digunakan untuk prediksi AF/Non-AF.
+                        </div>
+                    </div>
+                    <div id="monitoringChartsContent" class="d-none">
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
                         <h3 class="h6 fw-bold mb-0">BPM</h3>
                         <div class="btn-group" aria-label="Kontrol zoom grafik BPM">
@@ -178,6 +186,7 @@
                         </div>
                     </div>
                     <div class="chart-box"><canvas id="monitoringEkgChart"></canvas></div>
+                    </div>
                 </div>
             </div>
 
@@ -316,8 +325,33 @@
     function renderMonitoringCharts(data) {
         monitoringBpmChart?.destroy();
         monitoringEkgChart?.destroy();
+        monitoringBpmChart = null;
+        monitoringEkgChart = null;
+
+        if (!updateMonitoringSignalAlert(data)) return;
+
         monitoringBpmChart = createMonitoringBpmChart(bpmPoints(data));
         monitoringEkgChart = createMonitoringEkgChart(data);
+    }
+
+    function updateMonitoringSignalAlert(data) {
+        const alert = document.getElementById('monitoringSignalAlert');
+        const content = document.getElementById('monitoringChartsContent');
+        if (!alert || !content || data.total_samples === undefined) {
+            content?.classList.add('d-none');
+            return false;
+        }
+
+        const totalSamples = Number(data.total_samples || 0);
+        const minimumSamples = Number(data.minimum_samples || 5000);
+        const insufficient = totalSamples < minimumSamples;
+        alert.classList.toggle('d-none', !insufficient);
+        alert.classList.toggle('d-flex', insufficient);
+        content.classList.toggle('d-none', insufficient);
+        document.getElementById('monitoringSignalSamples').textContent = totalSamples.toLocaleString('id-ID');
+        document.getElementById('monitoringMinimumSamples').textContent = minimumSamples.toLocaleString('id-ID');
+
+        return !insufficient;
     }
 
     async function loadMonitoringCharts(sessionId) {

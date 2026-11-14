@@ -6,23 +6,41 @@
 
 @section('content')
     @php
-        $sessionChartData = $sessions->map(function ($session) {
+        $minimumSamples = max((int) config('ekg.minimum_samples', 5000), 2);
+        $allSessionChartData = $sessions->map(function ($session) {
+            $raw = $session->rawSignal?->voltage_values ?? [];
+
             return [
                 'label' => $session->recorded_at?->format('Y-m-d H:i') ?? '#'.$session->id,
                 'bpm' => $session->feature?->bpm,
-                'raw' => $session->rawSignal?->voltage_values ?? [],
+                'raw' => $raw,
                 'filtered' => $session->rawSignal?->filtered_values ?? [],
                 'r_peaks' => $session->rawSignal?->r_peak_indices ?? [],
                 'sample_rate' => $session->rawSignal?->sample_rate ?? 360,
+                'total_samples' => $session->rawSignal?->total_samples ?: count($raw),
             ];
         })->values();
+        $sessionChartData = $allSessionChartData
+            ->filter(fn ($session) => $session['total_samples'] >= $minimumSamples)
+            ->values();
+        $excludedSessions = $allSessionChartData->count() - $sessionChartData->count();
         $firstRawSession = $sessionChartData->first(fn ($session) => count($session['raw']) > 0);
         $firstDuration = $firstRawSession ? count($firstRawSession['raw']) / max($firstRawSession['sample_rate'], 1) : 5;
         $firstEkgWidth = min(max((int) ceil($firstDuration * 220), 1200), 30000);
     @endphp
 
+    @if ($excludedSessions > 0)
+        <div class="alert alert-warning d-flex align-items-start gap-2 mb-4" role="alert">
+            <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+            <div>
+                <strong>{{ $excludedSessions }} sesi tidak divisualisasikan.</strong>
+                Jumlah sinyal pada sesi tersebut kurang dari minimal {{ number_format($minimumSamples, 0, ',', '.') }} sampel. Data tetap tersimpan dan tersedia di riwayat sesi.
+            </div>
+        </div>
+    @endif
+
     <div class="row g-4">
-        <div class="col-12 col-xl-4">
+        <div class="col-12 {{ $sessionChartData->isNotEmpty() ? 'col-xl-4' : '' }}">
             <div class="panel">
                 <div class="panel-header"><h2 class="h5 fw-bold mb-0">Informasi Pasien</h2></div>
                 <div class="panel-body">
@@ -56,6 +74,7 @@
                 </div>
             </div>
         </div>
+        @if ($sessionChartData->isNotEmpty())
         <div class="col-12 col-xl-8">
             <div class="panel">
                 <div class="panel-header">
@@ -69,8 +88,10 @@
                 <div class="panel-body"><div class="chart-box"><canvas id="patientBpmChart"></canvas></div></div>
             </div>
         </div>
+        @endif
     </div>
 
+    @if ($firstRawSession)
     <div class="panel mt-4">
         <div class="panel-header"><h2 class="h5 fw-bold mb-0">Riwayat Sesi</h2></div>
         <div class="panel-body">
@@ -95,6 +116,7 @@
             </div>
         </div>
     </div>
+    @endif
 @endsection
 
 @push('scripts')

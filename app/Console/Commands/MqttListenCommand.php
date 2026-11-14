@@ -180,6 +180,16 @@ class MqttListenCommand extends Command
             'predicted_at' => now(),
         ]);
 
+        $minimumSamples = max((int) config('ekg.minimum_samples', 5000), 2);
+        if (count($payload['raw_signal']) < $minimumSamples) {
+            $this->warn(sprintf(
+                'Sinyal sesi #%d belum mencukupi: %d dari minimal %d sampel. Data tetap disimpan.',
+                $session->id,
+                count($payload['raw_signal']),
+                $minimumSamples
+            ));
+        }
+
         $this->info("Session saved: #{$session->id}, Patient={$patient->name}, BPM={$payload['bpm']}");
         $this->buffer = [];
     }

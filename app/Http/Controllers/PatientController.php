@@ -116,16 +116,19 @@ class PatientController extends Controller
     public function bpmTrend(Request $request, string $patient)
     {
         $patient = AccessScope::apply(Patient::query(), $request->user())
-            ->with('recordingSessions.feature')
+            ->with(['recordingSessions.feature', 'recordingSessions.rawSignal:id,recording_session_id,total_samples'])
             ->findOrFail($patient);
 
+        $minimumSamples = max((int) config('ekg.minimum_samples', 5000), 2);
+        $validSessions = $patient->recordingSessions
+            ->filter(fn (RecordingSession $session) => ($session->rawSignal?->total_samples ?? 0) >= $minimumSamples)
+            ->sortBy('recorded_at');
+
         return response()->json([
-            'labels' => $patient->recordingSessions
-                ->sortBy('recorded_at')
+            'labels' => $validSessions
                 ->map(fn (RecordingSession $session) => $session->recorded_at?->format('Y-m-d H:i') ?? (string) $session->id)
                 ->values(),
-            'bpm' => $patient->recordingSessions
-                ->sortBy('recorded_at')
+            'bpm' => $validSessions
                 ->map(fn (RecordingSession $session) => $session->feature?->bpm)
                 ->values(),
         ]);

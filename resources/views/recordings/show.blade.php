@@ -12,9 +12,12 @@
     @php($filteredSignal = $recording->rawSignal?->filtered_values ?? [])
     @php($rPeaks = $recording->rawSignal?->r_peak_indices ?? [])
     @php($sampleRate = $recording->rawSignal?->sample_rate ?? 360)
+    @php($totalSamples = $recording->rawSignal?->total_samples ?: count($rawSignal))
+    @php($minimumSamples = max((int) config('ekg.minimum_samples', 5000), 2))
+    @php($signalInsufficient = $totalSamples < $minimumSamples)
     @php($duration = count($rawSignal) / max($sampleRate, 1))
     @php($ekgWidth = min(max((int) ceil($duration * 220), 1100), 30000))
-    @php($predictionText = match ($prediction?->label) {
+    @php($predictionText = $signalInsufficient ? 'Belum tersedia' : match ($prediction?->label) {
         'PERSISTENT_AF' => 'Persistent AF',
         'PAROXYSMAL_AF' => 'Paroxysmal AF',
         'NON_AF' => 'Non-AF',
@@ -52,7 +55,18 @@
         </div>
     </div>
 
+    @if ($signalInsufficient)
+        <div class="alert alert-warning d-flex align-items-start gap-2 mb-4" role="alert">
+            <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+            <div>
+                <strong>Sinyal EKG belum mencukupi.</strong>
+                Tersedia {{ number_format($totalSamples, 0, ',', '.') }} dari minimal {{ number_format($minimumSamples, 0, ',', '.') }} sampel. Data tetap disimpan, tetapi tidak divisualisasikan dan belum digunakan untuk prediksi AF/Non-AF.
+            </div>
+        </div>
+    @endif
+
     <div class="row g-4">
+        @if (! $signalInsufficient)
         <div class="col-12 col-xl-8">
             <div class="panel mb-4">
                 <div class="panel-header">
@@ -101,7 +115,8 @@
                 </div>
             </div>
         </div>
-        <div class="col-12 col-xl-4">
+        @endif
+        <div class="col-12 {{ $signalInsufficient ? '' : 'col-xl-4' }}">
             <div class="panel">
                 <div class="panel-header">
                     <h2 class="h5 fw-bold mb-0">Informasi Pasien</h2>
@@ -113,7 +128,7 @@
                         <dt class="col-5 text-secondary">Alat</dt><dd class="col-7">{{ $recording->device?->name ?? '-' }}</dd>
                         <dt class="col-5 text-secondary">Tanggal</dt><dd class="col-7">{{ $recording->recorded_at?->format('Y-m-d H:i:s') ?? '-' }}</dd>
                     </dl>
-                    @if ($prediction?->error_message)
+                    @if ($prediction?->error_message && ! $signalInsufficient)
                         <div class="alert alert-warning small mt-3 mb-0">
                             <i class="bi bi-exclamation-triangle me-1"></i>{{ $prediction->error_message }}
                         </div>
@@ -125,6 +140,7 @@
     </div>
 @endsection
 
+@if (! $signalInsufficient)
 @push('scripts')
 <script>
     const storedHeartRate = @json(array_values($heartRate));
@@ -332,3 +348,4 @@
     });
 </script>
 @endpush
+@endif

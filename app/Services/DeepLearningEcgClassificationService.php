@@ -14,12 +14,20 @@ class DeepLearningEcgClassificationService
      */
     public function classify(array $rawSignal, int $sampleRate): array
     {
-        if (! (bool) env('DL_MODEL_ENABLED', true)) {
-            return $this->pending(null, 'Model deep learning belum diaktifkan.');
+        $minimumSamples = max((int) config('ekg.minimum_samples', 5000), 2);
+        if (count($rawSignal) < $minimumSamples) {
+            return $this->pending(
+                null,
+                sprintf(
+                    'Sinyal EKG belum mencukupi untuk prediksi: %s dari minimal %s sampel.',
+                    number_format(count($rawSignal), 0, ',', '.'),
+                    number_format($minimumSamples, 0, ',', '.')
+                )
+            );
         }
 
-        if (count($rawSignal) < max(2, $sampleRate * 5)) {
-            return $this->pending(null, 'Sinyal EKG terlalu pendek untuk model deep learning. Minimal 5 detik.');
+        if (! (bool) env('DL_MODEL_ENABLED', true)) {
+            return $this->pending(null, 'Model deep learning belum diaktifkan.');
         }
 
         $pipelineDir = $this->resolvePath((string) env('DL_MODEL_DIR', ''));

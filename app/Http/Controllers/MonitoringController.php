@@ -98,9 +98,21 @@ class MonitoringController extends Controller
     {
         $labels = Patient::query()
             ->visibleTo($user)
-            ->with('latestRecordingSession.prediction')
+            ->with([
+                'latestRecordingSession.prediction',
+                'latestRecordingSession.rawSignal:id,recording_session_id,total_samples',
+            ])
             ->get()
-            ->map(fn (Patient $patient) => $patient->latestRecordingSession?->prediction?->label);
+            ->map(function (Patient $patient) {
+                $session = $patient->latestRecordingSession;
+                $minimumSamples = max((int) config('ekg.minimum_samples', 5000), 2);
+
+                if (! $session?->rawSignal || $session->rawSignal->total_samples < $minimumSamples) {
+                    return null;
+                }
+
+                return $session->prediction?->label;
+            });
 
         $afLabels = ['AF', 'PERSISTENT_AF', 'PAROXYSMAL_AF'];
         $af = $labels->filter(fn ($label) => in_array($label, $afLabels, true))->count();
