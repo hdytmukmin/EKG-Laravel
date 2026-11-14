@@ -43,15 +43,25 @@ class Device extends Model
         }
 
         if (! $this->last_seen_at) {
-            return $this->status === 'online' ? 'offline' : ($this->status ?: 'unknown');
+            return 'offline';
         }
 
-        $offlineAfterMinutes = (int) env('DEVICE_OFFLINE_AFTER_MINUTES', 2);
+        $offlineAfterMinutes = max((int) config('monitoring.device_offline_after_minutes', 2), 1);
         if ($this->last_seen_at->lt(now()->subMinutes($offlineAfterMinutes))) {
             return 'offline';
         }
 
-        return $this->status === 'unknown' ? 'online' : $this->status;
+        return 'online';
+    }
+
+    public function statusLabel(): string
+    {
+        return match ($this->effectiveStatus()) {
+            'online' => 'Online',
+            'offline' => 'Offline',
+            'maintenance' => 'Pemeliharaan',
+            default => 'Tidak diketahui',
+        };
     }
 
     public function statusBadgeClass(): string

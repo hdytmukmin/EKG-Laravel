@@ -58,7 +58,14 @@
         </div>
         <div class="col-12 col-xl-8">
             <div class="panel">
-                <div class="panel-header"><h2 class="h5 fw-bold mb-0">Tren BPM</h2></div>
+                <div class="panel-header">
+                    <h2 class="h5 fw-bold mb-0">Tren BPM</h2>
+                    <div class="btn-group" aria-label="Kontrol zoom tren BPM">
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-patient-chart="bpm" data-zoom-action="in" title="Perbesar tren BPM"><i class="bi bi-zoom-in"></i></button>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-patient-chart="bpm" data-zoom-action="out" title="Perkecil tren BPM"><i class="bi bi-zoom-out"></i></button>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" data-patient-chart="bpm" data-zoom-action="reset" title="Reset zoom tren BPM"><i class="bi bi-arrow-counterclockwise"></i></button>
+                    </div>
+                </div>
                 <div class="panel-body"><div class="chart-box"><canvas id="patientBpmChart"></canvas></div></div>
             </div>
         </div>
@@ -72,7 +79,14 @@
     </div>
 
     <div class="panel mt-4">
-        <div class="panel-header"><h2 class="h5 fw-bold mb-0">Visualisasi Sinyal EKG</h2></div>
+        <div class="panel-header">
+            <h2 class="h5 fw-bold mb-0">Visualisasi Sinyal EKG</h2>
+            <div class="btn-group" aria-label="Kontrol zoom grafik EKG">
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-patient-chart="ekg" data-zoom-action="in" title="Perbesar grafik EKG"><i class="bi bi-zoom-in"></i></button>
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-patient-chart="ekg" data-zoom-action="out" title="Perkecil grafik EKG"><i class="bi bi-zoom-out"></i></button>
+                <button class="btn btn-sm btn-outline-secondary" type="button" data-patient-chart="ekg" data-zoom-action="reset" title="Reset zoom grafik EKG"><i class="bi bi-arrow-counterclockwise"></i></button>
+            </div>
+        </div>
         <div class="panel-body">
             <div class="ekg-scroll">
                 <div style="width: {{ $firstEkgWidth }}px; height: 320px">
@@ -86,9 +100,38 @@
 @push('scripts')
 <script>
     const sessions = @json($sessionChartData);
+    let patientBpmChart = null;
+    let patientEkgChart = null;
+
+    function patientZoomOptions(minRange = 1) {
+        return {
+            limits: { x: { min: 'original', max: 'original', minRange } },
+            pan: { enabled: true, mode: 'x', threshold: 8 },
+            zoom: {
+                wheel: { enabled: true, modifierKey: 'ctrl', speed: 0.08 },
+                pinch: { enabled: true },
+                mode: 'x'
+            }
+        };
+    }
+
     const bpmCtx = document.getElementById('patientBpmChart');
     if (bpmCtx) {
-        new Chart(bpmCtx, { type: 'line', data: { labels: sessions.map(s => s.label), datasets: [{ data: sessions.map(s => s.bpm), borderColor: '#0a84c1', tension: .25 }] }, options: { maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+        patientBpmChart = new Chart(bpmCtx, {
+            type: 'line',
+            data: {
+                labels: sessions.map(session => session.label),
+                datasets: [{ data: sessions.map(session => session.bpm), borderColor: '#0a84c1', backgroundColor: 'rgba(10, 132, 193, .12)', fill: true, tension: .25 }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    zoom: patientZoomOptions(1)
+                }
+            }
+        });
     }
     const signalSession = sessions.find(s => s.raw.length) || {};
     const raw = signalSession.raw || [];
@@ -103,7 +146,7 @@
             .map(index => ({ x: index / sampleRate, y: processed[index] + 0.035 }));
         const toPoints = values => values.map((value, index) => ({ x: index / sampleRate, y: value }));
 
-        new Chart(ekgCtx, {
+        patientEkgChart = new Chart(ekgCtx, {
             type: 'line',
             data: {
                 datasets: [
@@ -117,7 +160,11 @@
                 animation: false,
                 normalized: true,
                 parsing: false,
-                plugins: { legend: { position: 'top', align: 'start' } },
+                plugins: {
+                    legend: { position: 'top', align: 'start' },
+                    decimation: { enabled: true, algorithm: 'lttb', samples: 1200, threshold: 2000 },
+                    zoom: patientZoomOptions(0.25)
+                },
                 scales: {
                     x: { type: 'linear', title: { display: true, text: 'Waktu (s)' }, ticks: { callback: value => `${Number(value).toFixed(1)}s`, maxRotation: 0 } },
                     y: { title: { display: true, text: 'Amplitude' }, grid: { color: 'rgba(16, 42, 53, .08)' } }
@@ -125,5 +172,16 @@
             }
         });
     }
+
+    document.querySelectorAll('[data-patient-chart][data-zoom-action]').forEach(button => {
+        button.addEventListener('click', () => {
+            const chart = button.dataset.patientChart === 'bpm' ? patientBpmChart : patientEkgChart;
+            if (!chart) return;
+
+            if (button.dataset.zoomAction === 'in') chart.zoom({ x: 1.2 });
+            if (button.dataset.zoomAction === 'out') chart.zoom({ x: 0.8 });
+            if (button.dataset.zoomAction === 'reset') chart.resetZoom();
+        });
+    });
 </script>
 @endpush

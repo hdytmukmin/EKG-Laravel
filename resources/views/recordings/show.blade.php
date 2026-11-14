@@ -57,7 +57,14 @@
             <div class="panel mb-4">
                 <div class="panel-header">
                     <h2 class="h5 fw-bold mb-0">Grafik BPM</h2>
-                    <span class="badge text-bg-light">{{ max(count($heartRate), max(count($rPeaks) - 1, 0)) }} titik</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge text-bg-light">{{ max(count($heartRate), max(count($rPeaks) - 1, 0)) }} titik</span>
+                        <div class="btn-group" aria-label="Kontrol zoom grafik BPM">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-session-chart="bpm" data-zoom-action="in" title="Perbesar grafik BPM"><i class="bi bi-zoom-in"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-session-chart="bpm" data-zoom-action="out" title="Perkecil grafik BPM"><i class="bi bi-zoom-out"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-session-chart="bpm" data-zoom-action="reset" title="Reset zoom grafik BPM"><i class="bi bi-arrow-counterclockwise"></i></button>
+                        </div>
+                    </div>
                 </div>
                 <div class="panel-body">
                     <div class="chart-box"><canvas id="bpmChart"></canvas></div>
@@ -76,7 +83,14 @@
             <div class="panel">
                 <div class="panel-header">
                     <h2 class="h5 fw-bold mb-0">Grafik Sinyal EKG</h2>
-                    <span class="badge text-bg-light">{{ count($rawSignal) }} sample</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge text-bg-light">{{ count($rawSignal) }} sample</span>
+                        <div class="btn-group" aria-label="Kontrol zoom grafik EKG">
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-session-chart="ekg" data-zoom-action="in" title="Perbesar grafik EKG"><i class="bi bi-zoom-in"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-session-chart="ekg" data-zoom-action="out" title="Perkecil grafik EKG"><i class="bi bi-zoom-out"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" data-session-chart="ekg" data-zoom-action="reset" title="Reset zoom grafik EKG"><i class="bi bi-arrow-counterclockwise"></i></button>
+                        </div>
+                    </div>
                 </div>
                 <div class="panel-body">
                     <div class="ekg-scroll">
@@ -121,6 +135,18 @@
     const featureBpm = @json($feature?->bpm);
     const featureRr = @json($feature?->rr);
 
+    function sessionZoomOptions(minRange = 0.5) {
+        return {
+            limits: { x: { min: 'original', max: 'original', minRange } },
+            pan: { enabled: true, mode: 'x', threshold: 8 },
+            zoom: {
+                wheel: { enabled: true, modifierKey: 'ctrl', speed: 0.08 },
+                pinch: { enabled: true },
+                mode: 'x'
+            }
+        };
+    }
+
     function rrPointsFromPeaks(rPeakIndices, sampleRate) {
         const points = [];
         for (let index = 1; index < rPeakIndices.length; index++) {
@@ -160,10 +186,10 @@
             : [];
     }
 
-    function lineChart(id, label, points, color, fill = false, yTitle = '') {
+    function lineChart(id, label, points, color, fill = false, yTitle = '', zoomEnabled = false) {
         const ctx = document.getElementById(id);
-        if (!ctx) return;
-        new Chart(ctx, {
+        if (!ctx) return null;
+        return new Chart(ctx, {
             type: 'line',
             data: {
                 datasets: [{
@@ -182,7 +208,10 @@
                 maintainAspectRatio: false,
                 animation: points.length < 1200,
                 parsing: false,
-                plugins: { legend: { display: false } },
+                plugins: {
+                    legend: { display: false },
+                    zoom: zoomEnabled ? sessionZoomOptions(0.5) : undefined
+                },
                 scales: {
                     x: {
                         type: 'linear',
@@ -208,14 +237,14 @@
 
     function createEcgViewerChart(canvasId, rawValues, filteredValues, rPeakIndices, sampleRate) {
         const ctx = document.getElementById(canvasId);
-        if (!ctx) return;
+        if (!ctx) return null;
 
         const filtered = filteredValues.length ? filteredValues : rawValues;
         const rPeakPoints = rPeakIndices
             .filter(index => filtered[index] !== undefined)
             .map(index => ({ x: index / sampleRate, y: filtered[index] + 0.035 }));
 
-        new Chart(ctx, {
+        return new Chart(ctx, {
             type: 'line',
             data: {
                 datasets: [
@@ -259,6 +288,8 @@
                 interaction: { mode: 'nearest', intersect: false },
                 plugins: {
                     legend: { position: 'top', align: 'start' },
+                    decimation: { enabled: true, algorithm: 'lttb', samples: 1200, threshold: 2000 },
+                    zoom: sessionZoomOptions(0.25),
                     tooltip: {
                         callbacks: {
                             title: items => items.length ? `Waktu ${secondsLabel(items[0].parsed.x)}` : '',
@@ -285,8 +316,19 @@
     const bpmPoints = bpmPointsFromDatabase(storedHeartRate, rPeaks, sampleRate, featureBpm);
     const rrPoints = rrPointsFromDatabase(rPeaks, sampleRate, featureRr);
 
-    lineChart('bpmChart', 'BPM', bpmPoints, 'rgba(10, 132, 193, 1)', true, 'BPM');
+    const sessionBpmChart = lineChart('bpmChart', 'BPM', bpmPoints, 'rgba(10, 132, 193, 1)', true, 'BPM', true);
     lineChart('rrChart', 'RR Interval', rrPoints, 'rgba(25, 135, 84, 1)', false, 'RR (s)');
-    createEcgViewerChart('rawChart', rawSignal, filteredSignal, rPeaks, sampleRate);
+    const sessionEkgChart = createEcgViewerChart('rawChart', rawSignal, filteredSignal, rPeaks, sampleRate);
+
+    document.querySelectorAll('[data-session-chart][data-zoom-action]').forEach(button => {
+        button.addEventListener('click', () => {
+            const chart = button.dataset.sessionChart === 'bpm' ? sessionBpmChart : sessionEkgChart;
+            if (!chart) return;
+
+            if (button.dataset.zoomAction === 'in') chart.zoom({ x: 1.2 });
+            if (button.dataset.zoomAction === 'out') chart.zoom({ x: 0.8 });
+            if (button.dataset.zoomAction === 'reset') chart.resetZoom();
+        });
+    });
 </script>
 @endpush

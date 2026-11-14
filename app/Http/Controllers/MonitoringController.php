@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Device;
+use App\Models\Patient;
 use App\Models\RecordingSession;
+use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,15 +34,18 @@ class MonitoringController extends Controller
                 ->limit(10)
                 ->get();
 
+            $classification = $this->classificationSummary($request->user());
+
             $dbError = null;
         } catch (QueryException $exception) {
             $devices = collect();
             $latest = null;
             $sessions = collect();
+            $classification = ['af' => 0, 'non_af' => 0, 'unclassified' => 0, 'total' => 0];
             $dbError = $exception->getMessage();
         }
 
-        return view('monitoring.index', compact('devices', 'latest', 'sessions', 'dbError'));
+        return view('monitoring.index', compact('devices', 'latest', 'sessions', 'classification', 'dbError'));
     }
 
     public function latest(Request $request): JsonResponse
@@ -72,8 +77,11 @@ class MonitoringController extends Controller
                     'id' => $device->id,
                     'name' => $device->name,
                     'status' => $device->effectiveStatus(),
+                    'status_label' => $device->statusLabel(),
+                    'status_class' => $device->statusBadgeClass(),
                     'last_seen_at' => $device->last_seen_at?->format('Y-m-d H:i:s'),
                 ])->values(),
+                'classification' => $this->classificationSummary($request->user()),
                 'checked_at' => now()->format('Y-m-d H:i:s'),
             ]);
         } catch (QueryException $exception) {
@@ -84,5 +92,25 @@ class MonitoringController extends Controller
                 'checked_at' => now()->format('Y-m-d H:i:s'),
             ], 503);
         }
+    }
+
+    private function classificationSummary(User $user): array
+    {
+        $labels = Patient::query()
+            ->visibleTo($user)
+            ->with('latestRecordingSession.prediction')
+            ->get()
+            ->map(fn (Patient $patient) => $patient->latestRecordingSession?->prediction?->label);
+
+        $afLabels = ['AF', 'PERSISTENT_AF', 'PAROXYSMAL_AF'];
+        $af = $labels->filter(fn ($label) => in_array($label, $afLabels, true))->count();
+        $nonAf = $labels->filter(fn ($label) => $label === 'NON_AF')->count();
+
+        return [
+            'af' => $af,
+            'non_af' => $nonAf,
+            'unclassified' => $labels->count() - $af - $nonAf,
+            'total' => $labels->count(),
+        ];
     }
 }

@@ -67,7 +67,7 @@
                                 <td>{{ $device->mqtt_client_id ?: '-' }}</td>
                                 <td>
                                     <span class="badge {{ $device->statusBadgeClass() }}">
-                                        {{ ucfirst($device->effectiveStatus()) }}
+                                        {{ $device->statusLabel() }}
                                     </span>
                                 </td>
                                 <td>{{ $device->last_seen_at?->format('Y-m-d H:i:s') ?? '-' }}</td>

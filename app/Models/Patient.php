@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Patient extends Model
 {
@@ -26,6 +27,11 @@ class Patient extends Model
     public function recordingSessions(): HasMany
     {
         return $this->hasMany(RecordingSession::class);
+    }
+
+    public function latestRecordingSession(): HasOne
+    {
+        return $this->hasOne(RecordingSession::class)->latestOfMany('recorded_at');
     }
 
     public function scopeVisibleTo(Builder $query, User $user): Builder
