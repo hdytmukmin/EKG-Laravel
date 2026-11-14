@@ -10,7 +10,7 @@
         <h2>Data pasien dan riwayat pemeriksaan</h2>
         <div class="hero-actions">
             <span class="hero-chip"><i class="bi bi-search"></i> Pencarian</span>
-            <span class="hero-chip"><i class="bi bi-hospital"></i> Puskesmas</span>
+            <span class="hero-chip"><i class="bi bi-hospital"></i> Fasilitas Kesehatan</span>
             <span class="hero-chip"><i class="bi bi-clock-history"></i> Riwayat sesi</span>
         </div>
     </section>

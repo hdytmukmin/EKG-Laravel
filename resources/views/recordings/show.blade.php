@@ -104,7 +104,7 @@
                 <div class="panel-body">
                     <dl class="row mb-0">
                         <dt class="col-5 text-secondary">Nama</dt><dd class="col-7">{{ $recording->patient?->name ?? '-' }}</dd>
-                        <dt class="col-5 text-secondary">Puskesmas</dt><dd class="col-7">{{ $recording->puskesmas?->name ?? '-' }}</dd>
+                        <dt class="col-5 text-secondary">Fasilitas Kesehatan</dt><dd class="col-7">{{ $recording->puskesmas?->name ?? '-' }}</dd>
                         <dt class="col-5 text-secondary">Alat</dt><dd class="col-7">{{ $recording->device?->name ?? '-' }}</dd>
                         <dt class="col-5 text-secondary">Tanggal</dt><dd class="col-7">{{ $recording->recorded_at?->format('Y-m-d H:i:s') ?? '-' }}</dd>
                         <dt class="col-5 text-secondary">SDNN</dt><dd class="col-7">{{ $feature?->sdnn ?? '-' }}</dd>

@@ -426,7 +426,7 @@
                         <i class="bi bi-person-circle"></i>
                         <div>
                             <strong>{{ auth()->user()->name ?? 'Guest' }}</strong>
-                            <span>{{ auth()->user()?->isSuperAdmin() ? 'Super Admin' : 'Admin Puskesmas' }}</span>
+                            <span>{{ auth()->user()?->isSuperAdmin() ? 'Super Admin' : 'Admin Fasilitas Kesehatan' }}</span>
                         </div>
                     </div>
                     <form method="POST" action="{{ route('logout') }}">

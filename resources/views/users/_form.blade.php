@@ -9,14 +9,14 @@
 <div class="col-12">
     <label class="form-label">Role</label>
     <select name="role" class="form-select" required>
-        <option value="admin_puskesmas" @selected(old('role', $managedUser?->role ?? 'admin_puskesmas') === 'admin_puskesmas')>Admin Puskesmas</option>
+        <option value="admin_puskesmas" @selected(old('role', $managedUser?->role ?? 'admin_puskesmas') === 'admin_puskesmas')>Admin Fasilitas Kesehatan</option>
         <option value="super_admin" @selected(old('role', $managedUser?->role) === 'super_admin')>Super Admin</option>
     </select>
 </div>
 <div class="col-12">
-    <label class="form-label">Puskesmas</label>
+    <label class="form-label">Fasilitas Kesehatan</label>
     <select name="puskesmas_id" class="form-select">
-        <option value="">Tidak terikat puskesmas</option>
+        <option value="">Tidak terikat fasilitas kesehatan</option>
         @foreach ($puskesmasOptions as $puskesmas)
             <option value="{{ $puskesmas->id }}" @selected((int) old('puskesmas_id', $managedUser?->puskesmas_id) === $puskesmas->id)>
                 {{ $puskesmas->name }}

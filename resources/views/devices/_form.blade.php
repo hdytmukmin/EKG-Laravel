@@ -1,5 +1,5 @@
 <div class="col-12">
-    <label class="form-label">Puskesmas</label>
+    <label class="form-label">Fasilitas Kesehatan</label>
     <select name="puskesmas_id" class="form-select" @disabled(! auth()->user()->isSuperAdmin())>
         @foreach ($puskesmasOptions as $puskesmas)
             <option value="{{ $puskesmas->id }}" @selected(old('puskesmas_id', $device?->puskesmas_id ?? auth()->user()->puskesmas_id) == $puskesmas->id)>

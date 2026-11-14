@@ -56,11 +56,11 @@
                     <label class="form-label small text-secondary">Search</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-search"></i></span>
-                        <input type="search" name="q" class="form-control" value="{{ request('q') }}" placeholder="Pasien, puskesmas, atau alat">
+                        <input type="search" name="q" class="form-control" value="{{ request('q') }}" placeholder="Pasien, fasilitas kesehatan, atau alat">
                     </div>
                 </div>
                 <div class="col-12 col-md-6 col-xl-2">
-                    <label class="form-label small text-secondary">Puskesmas</label>
+                    <label class="form-label small text-secondary">Fasilitas Kesehatan</label>
                     <select name="puskesmas_id" class="form-select" @disabled(! auth()->user()->isSuperAdmin())>
                         <option value="">Semua</option>
                         @foreach ($puskesmasOptions as $puskesmas)

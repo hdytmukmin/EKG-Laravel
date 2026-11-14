@@ -4,7 +4,7 @@
             <tr>
                 <th>ID</th>
                 <th>Pasien</th>
-                <th>Puskesmas</th>
+                <th>Fasilitas Kesehatan</th>
                 <th>Umur</th>
                 <th>Gender</th>
                 <th>Sesi</th>

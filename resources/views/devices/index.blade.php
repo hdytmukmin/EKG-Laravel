@@ -18,7 +18,7 @@
                     <label class="form-label small text-secondary">Search</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-search"></i></span>
-                        <input type="search" name="q" class="form-control" value="{{ request('q') }}" placeholder="Nama alat, UID, client ID, puskesmas">
+                        <input type="search" name="q" class="form-control" value="{{ request('q') }}" placeholder="Nama alat, UID, client ID, fasilitas kesehatan">
                     </div>
                 </div>
                 <div class="col-6 col-lg-3">
@@ -48,7 +48,7 @@
                     <thead>
                         <tr>
                             <th>Alat</th>
-                            <th>Puskesmas</th>
+                            <th>Fasilitas Kesehatan</th>
                             <th>Client MQTT</th>
                             <th>Status</th>
                             <th>Last Seen</th>

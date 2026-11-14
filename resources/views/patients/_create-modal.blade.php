@@ -16,7 +16,7 @@
                     <div class="col-6"><label class="form-label">Gender</label><input name="gender" class="form-control" placeholder="Laki-laki/Perempuan"></div>
                 </div>
                 <div class="mt-3"><label class="form-label">Alamat</label><textarea name="address" class="form-control" rows="2"></textarea></div>
-                <div class="form-text mt-2">Pasien otomatis terikat ke puskesmas admin yang sedang login.</div>
+                <div class="form-text mt-2">Pasien otomatis terikat ke fasilitas kesehatan admin yang sedang login.</div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Batal</button>

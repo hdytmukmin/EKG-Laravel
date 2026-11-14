@@ -98,7 +98,7 @@ class UserManagementController extends Controller
 
         if (empty($data['puskesmas_id'])) {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'puskesmas_id' => 'Admin puskesmas wajib dipasangkan ke satu puskesmas.',
+                'puskesmas_id' => 'Admin fasilitas kesehatan wajib dipasangkan ke satu fasilitas kesehatan.',
             ]);
         }
 

@@ -27,7 +27,7 @@
                 <div class="panel-header"><h2 class="h5 fw-bold mb-0">Informasi Pasien</h2></div>
                 <div class="panel-body">
                     <dl class="row mb-0">
-                        <dt class="col-5 text-secondary">Puskesmas</dt><dd class="col-7">{{ $patient->puskesmas?->name }}</dd>
+                        <dt class="col-5 text-secondary">Fasilitas Kesehatan</dt><dd class="col-7">{{ $patient->puskesmas?->name }}</dd>
                         <dt class="col-5 text-secondary">Umur</dt><dd class="col-7">{{ $patient->age ?? '-' }}</dd>
                         <dt class="col-5 text-secondary">Gender</dt><dd class="col-7">{{ $patient->gender ?? '-' }}</dd>
                         <dt class="col-5 text-secondary">Alamat</dt><dd class="col-7">{{ $patient->address ?? '-' }}</dd>

@@ -18,7 +18,7 @@
                     <label class="form-label small text-secondary">Search</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="bi bi-search"></i></span>
-                        <input type="search" name="q" class="form-control" value="{{ request('q') }}" placeholder="Nama, email, atau puskesmas">
+                        <input type="search" name="q" class="form-control" value="{{ request('q') }}" placeholder="Nama, email, atau fasilitas kesehatan">
                     </div>
                 </div>
                 <div class="col-6 col-lg-3">
@@ -26,7 +26,7 @@
                     <select name="role" class="form-select">
                         <option value="">Semua</option>
                         <option value="super_admin" @selected(request('role') === 'super_admin')>Super Admin</option>
-                        <option value="admin_puskesmas" @selected(request('role') === 'admin_puskesmas')>Admin Puskesmas</option>
+                        <option value="admin_puskesmas" @selected(request('role') === 'admin_puskesmas')>Admin Fasilitas Kesehatan</option>
                     </select>
                 </div>
                 <div class="col-6 col-lg-2">
@@ -48,7 +48,7 @@
                         <tr>
                             <th>User</th>
                             <th>Role</th>
-                            <th>Puskesmas</th>
+                            <th>Fasilitas Kesehatan</th>
                             <th>Dibuat</th>
                             <th class="text-end">Aksi</th>
                         </tr>
@@ -62,7 +62,7 @@
                                 </td>
                                 <td>
                                     <span class="badge {{ $managedUser->isSuperAdmin() ? 'text-bg-primary' : 'text-bg-info' }}">
-                                        {{ $managedUser->isSuperAdmin() ? 'Super Admin' : 'Admin Puskesmas' }}
+                                        {{ $managedUser->isSuperAdmin() ? 'Super Admin' : 'Admin Fasilitas Kesehatan' }}
                                     </span>
                                 </td>
                                 <td>{{ $managedUser->puskesmas?->name ?? '-' }}</td>
