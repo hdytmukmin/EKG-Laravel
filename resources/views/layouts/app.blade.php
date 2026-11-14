@@ -405,6 +405,9 @@
                 <a class="side-link {{ request()->routeIs('monitoring.*') ? 'active' : '' }}" href="{{ route('monitoring.index') }}">
                     <i class="bi bi-broadcast"></i><span>Monitoring</span>
                 </a>
+                <a class="side-link {{ request()->routeIs('facilities.*') ? 'active' : '' }}" href="{{ route('facilities.index') }}">
+                    <i class="bi bi-hospital"></i><span>Fasilitas Kesehatan</span>
+                </a>
                 <a class="side-link {{ request()->routeIs('devices.*') ? 'active' : '' }}" href="{{ route('devices.index') }}">
                     <i class="bi bi-cpu"></i><span>Alat EKG</span>
                 </a>

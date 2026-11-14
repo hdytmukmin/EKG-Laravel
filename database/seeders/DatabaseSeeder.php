@@ -5,14 +5,11 @@ namespace Database\Seeders;
 use App\Models\Device;
 use App\Models\Puskesmas;
 use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
      * Seed the application's database.
      */
@@ -61,5 +58,21 @@ class DatabaseSeeder extends Seeder
         });
 
         $this->call(LegacyEcgCsvSeeder::class);
+
+        Device::query()
+            ->whereNotNull('puskesmas_id')
+            ->each(function (Device $device): void {
+                $device->assignments()->firstOrCreate(
+                    [
+                        'puskesmas_id' => $device->puskesmas_id,
+                        'status' => 'active',
+                        'unassigned_at' => null,
+                    ],
+                    [
+                        'assigned_at' => $device->created_at ?? now(),
+                        'notes' => 'Penugasan awal dari seeder',
+                    ]
+                );
+            });
     }
 }

@@ -34,7 +34,7 @@ class DashboardController extends Controller
                 ->limit(8)
                 ->get();
 
-            $devices = AccessScope::apply(Device::query(), $user)
+            $devices = Device::query()->visibleTo($user)
                 ->get();
 
             $dbError = null;

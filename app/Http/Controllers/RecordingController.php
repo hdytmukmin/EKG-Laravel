@@ -64,8 +64,12 @@ class RecordingController extends Controller
                 ? Puskesmas::query()->orderBy('name')->get()
                 : Puskesmas::query()->whereKey($user->puskesmas_id)->get();
 
-            $deviceOptions = AccessScope::apply(Device::query(), $user)
-                ->when($puskesmasId, fn ($query) => $query->where('puskesmas_id', $puskesmasId))
+            $deviceOptions = Device::query()
+                ->visibleTo($user)
+                ->when($puskesmasId, fn ($query) => $query->where(function ($inner) use ($puskesmasId) {
+                    $inner->whereHas('activeAssignments', fn ($assignment) => $assignment->where('puskesmas_id', $puskesmasId))
+                        ->orWhere('puskesmas_id', $puskesmasId);
+                }))
                 ->orderBy('name')
                 ->get();
 

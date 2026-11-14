@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Device extends Model
@@ -26,6 +28,22 @@ class Device extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::created(function (Device $device): void {
+            if (! $device->puskesmas_id) {
+                return;
+            }
+
+            $device->assignments()->create([
+                'puskesmas_id' => $device->puskesmas_id,
+                'assigned_at' => now(),
+                'status' => 'active',
+                'notes' => 'Penugasan awal alat',
+            ]);
+        });
+    }
+
     public function puskesmas(): BelongsTo
     {
         return $this->belongsTo(Puskesmas::class);
@@ -34,6 +52,39 @@ class Device extends Model
     public function recordingSessions(): HasMany
     {
         return $this->hasMany(RecordingSession::class);
+    }
+
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(DeviceAssignment::class);
+    }
+
+    public function activeAssignments(): HasMany
+    {
+        return $this->assignments()
+            ->where('status', 'active')
+            ->whereNull('unassigned_at');
+    }
+
+    public function facilities(): BelongsToMany
+    {
+        return $this->belongsToMany(Puskesmas::class, 'device_assignments')
+            ->wherePivot('status', 'active')
+            ->wherePivotNull('unassigned_at')
+            ->withPivot(['id', 'assigned_at', 'unassigned_at', 'status', 'notes'])
+            ->withTimestamps();
+    }
+
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        if ($user->isSuperAdmin()) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $inner) use ($user) {
+            $inner->whereHas('activeAssignments', fn (Builder $assignment) => $assignment->where('puskesmas_id', $user->puskesmas_id))
+                ->orWhere('puskesmas_id', $user->puskesmas_id);
+        });
     }
 
     public function effectiveStatus(): string

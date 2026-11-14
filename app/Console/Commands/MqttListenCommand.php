@@ -12,6 +12,7 @@ use App\Models\RecordingSession;
 use App\Services\DeepLearningEcgClassificationService;
 use App\Services\EcgSignalProcessingService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use PhpMqtt\Client\ConnectionSettings;
 use PhpMqtt\Client\MqttClient;
 use Throwable;
@@ -23,6 +24,9 @@ class MqttListenCommand extends Command
     protected $description = 'Listen to EKG MQTT topics and store data into the AF/Non-AF Laravel schema.';
 
     private const TOPIC_TO_FIELD = [
+        'building/device_uid' => 'device_uid',
+        'building/faskes_id' => 'faskes_id',
+        'building/faskes_code' => 'faskes_code',
         'building/subjek' => 'subject',
         'building/tspt' => 'interval_pt',
         'building/bpm' => 'bpm',
@@ -32,29 +36,50 @@ class MqttListenCommand extends Command
         'building/rawdata' => 'raw_signal',
     ];
 
+    private const FIELD_ALIASES = [
+        'faskes_id' => 'faskes_id',
+        'faskes_code' => 'faskes_code',
+        'subjek' => 'subject',
+        'subject' => 'subject',
+        'tspt' => 'interval_pt',
+        'interval_pt' => 'interval_pt',
+        'bpm' => 'bpm',
+        'rr' => 'rr',
+        'rrlokal' => 'rr_lokal',
+        'rr_lokal' => 'rr_lokal',
+        'hrr' => 'heart_rate',
+        'heart_rate' => 'heart_rate',
+        'rawdata' => 'raw_signal',
+        'raw_signal' => 'raw_signal',
+    ];
+
     private const REQUIRED_FIELDS = ['subject', 'interval_pt', 'bpm', 'rr', 'rr_lokal', 'heart_rate', 'raw_signal'];
 
-    private array $buffer = [];
+    private array $buffers = [];
+
+    private ?string $legacyDeviceUid = null;
+
+    private int $savedSessions = 0;
 
     public function handle(EcgSignalProcessingService $processor, DeepLearningEcgClassificationService $classifier): int
     {
-        $host = (string) env('MQTT_HOST', '160.187.144.147');
-        $port = (int) env('MQTT_PORT', 1883);
-        $clientId = (string) env('MQTT_CLIENT_ID', 'ekg-laravel-'.gethostname().'-'.getmypid());
+        $host = (string) config('mqtt.host');
+        $port = (int) config('mqtt.port');
+        $clientId = (string) config('mqtt.client_id');
 
         $settings = (new ConnectionSettings)
-            ->setKeepAliveInterval((int) env('MQTT_KEEPALIVE', 60))
-            ->setConnectTimeout((int) env('MQTT_CONNECT_TIMEOUT', 10))
+            ->setKeepAliveInterval((int) config('mqtt.keepalive'))
+            ->setConnectTimeout((int) config('mqtt.connect_timeout'))
             ->setReconnectAutomatically(true)
-            ->setMaxReconnectAttempts((int) env('MQTT_RECONNECT_ATTEMPTS', 0))
-            ->setDelayBetweenReconnectAttempts((int) env('MQTT_RECONNECT_DELAY', 3));
+            ->setMaxReconnectAttempts((int) config('mqtt.reconnect_attempts'))
+            ->setDelayBetweenReconnectAttempts((int) config('mqtt.reconnect_delay'));
 
-        if (filled(env('MQTT_USERNAME'))) {
-            $settings->setUsername((string) env('MQTT_USERNAME'));
+        if (filled(config('mqtt.username'))) {
+            $settings->setUsername((string) config('mqtt.username'));
         }
 
-        if (filled(env('MQTT_PASSWORD'))) {
-            $settings->setPassword((string) env('MQTT_PASSWORD'));
+        if (filled(config('mqtt.password'))) {
+            $settings->setPassword((string) config('mqtt.password'));
         }
 
         $mqtt = new MqttClient($host, $port, $clientId);
@@ -67,13 +92,22 @@ class MqttListenCommand extends Command
                 $mqtt->subscribe($topic, function (string $topic, string $message) use ($mqtt, $processor, $classifier): void {
                     $this->handleMessage($topic, $message, $processor, $classifier);
 
-                    if ($this->option('once') && empty($this->buffer)) {
+                    if ($this->option('once') && $this->savedSessions > 0) {
                         $mqtt->interrupt();
                     }
                 }, MqttClient::QOS_AT_MOST_ONCE);
 
                 $this->line("Subscribed: {$topic}");
             }
+
+            $mqtt->subscribe('ekg/+/+', function (string $topic, string $message) use ($mqtt, $processor, $classifier): void {
+                $this->handleMessage($topic, $message, $processor, $classifier);
+
+                if ($this->option('once') && $this->savedSessions > 0) {
+                    $mqtt->interrupt();
+                }
+            }, MqttClient::QOS_AT_MOST_ONCE);
+            $this->line('Subscribed: ekg/+/+');
 
             $this->info('Waiting for MQTT EKG data...');
             $mqtt->loop(true);
@@ -97,107 +131,153 @@ class MqttListenCommand extends Command
         EcgSignalProcessingService $processor,
         DeepLearningEcgClassificationService $classifier
     ): void {
-        $field = self::TOPIC_TO_FIELD[$topic] ?? null;
+        [$deviceUid, $field] = $this->resolveTopicContext($topic, $message);
         if ($field === null) {
             return;
         }
 
+        if ($field === 'device_uid') {
+            $normalizedUid = $this->normalizeIdentifier($message);
+            if ($normalizedUid === '') {
+                $this->warn('Payload device_uid kosong.');
+                return;
+            }
+
+            $this->legacyDeviceUid = $normalizedUid;
+            $this->line("MQTT device context: {$normalizedUid}");
+            return;
+        }
+
+        if ($deviceUid === null) {
+            $this->warn("MQTT {$topic} diabaikan karena device_uid belum tersedia.");
+            return;
+        }
+
         if ($field === 'subject') {
-            $this->buffer = [];
+            $facilityContext = array_intersect_key(
+                $this->buffers[$deviceUid] ?? [],
+                array_flip(['faskes_id', 'faskes_code'])
+            );
+            $this->buffers[$deviceUid] = $facilityContext;
         }
 
-        $this->buffer[$field] = $message;
-        $this->line("MQTT received: {$topic}");
+        $this->buffers[$deviceUid][$field] = $message;
+        $this->line("MQTT received: {$topic} [device={$deviceUid}]");
 
-        if (! $this->hasCompleteFeaturePayload()) {
+        if (! $this->hasCompleteFeaturePayload($deviceUid)) {
             return;
         }
 
-        $payload = $this->normalizePayload($this->buffer);
+        $buffer = $this->buffers[$deviceUid];
+        $payload = $this->normalizePayload($buffer);
         if ($payload === null) {
-            $this->buffer = [];
+            unset($this->buffers[$deviceUid]);
             return;
         }
 
-        $device = $this->resolveDevice();
-        $patient = Patient::query()->firstOrCreate(
-            [
-                'puskesmas_id' => $device->puskesmas_id,
-                'name' => $payload['subject'],
-            ],
-            [
-                'external_subject_id' => $payload['subject'],
-            ]
-        );
+        try {
+            [$device, $facility] = $this->resolveDeviceAndFacility($deviceUid, $buffer);
+            $sampleRate = max((int) config('ekg.sample_rate', 250), 1);
+            $processed = $processor->process($payload['raw_signal'], $sampleRate);
+            $prediction = $classifier->classify($payload['raw_signal'], $sampleRate);
 
-        $device->update([
-            'status' => 'online',
-            'last_seen_at' => now(),
-        ]);
+            [$session, $patient] = DB::transaction(function () use (
+                $device,
+                $facility,
+                $payload,
+                $processed,
+                $prediction,
+                $processor,
+                $sampleRate
+            ): array {
+                $patient = Patient::query()->firstOrCreate(
+                    [
+                        'puskesmas_id' => $facility->id,
+                        'name' => $payload['subject'],
+                    ],
+                    ['external_subject_id' => $payload['subject']]
+                );
 
-        $session = RecordingSession::create([
-            'puskesmas_id' => $device->puskesmas_id,
-            'device_id' => $device->id,
-            'patient_id' => $patient->id,
-            'recorded_at' => now(),
-            'status' => 'completed',
-            'source' => 'mqtt',
-        ]);
+                $device->update([
+                    'status' => 'online',
+                    'last_seen_at' => now(),
+                ]);
 
-        $sampleRate = (int) env('EKG_SAMPLE_RATE', 0) ?: 200;
-        $processed = $processor->process($payload['raw_signal'], $sampleRate);
-        $feature = EkgFeature::create([
-            'recording_session_id' => $session->id,
-            'subject' => $payload['subject'],
-            'interval_pt' => $payload['interval_pt'],
-            'bpm' => $payload['bpm'],
-            'rr' => $payload['rr'],
-            'rr_lokal' => $payload['rr_lokal'],
-            'status' => $payload['status'],
-            'sdnn' => $processed['sdnn'],
-            'sns' => $processed['sns'],
-            'heart_rate' => $payload['heart_rate'] ?: $processed['heart_rate'],
-        ]);
+                $session = RecordingSession::create([
+                    'puskesmas_id' => $facility->id,
+                    'device_id' => $device->id,
+                    'patient_id' => $patient->id,
+                    'recorded_at' => now(),
+                    'status' => 'completed',
+                    'source' => 'mqtt',
+                ]);
 
-        if ($payload['raw_signal'] !== []) {
-            EkgRawSignal::create([
-                'recording_session_id' => $session->id,
-                'voltage_values' => $processor->roundSeries($payload['raw_signal'], 6),
-                'filtered_values' => $processed['filtered_values'],
-                'r_peak_indices' => $processed['r_peak_indices'],
-                'sample_rate' => $sampleRate,
-                'total_samples' => count($payload['raw_signal']),
-            ]);
-        }
+                EkgFeature::create([
+                    'recording_session_id' => $session->id,
+                    'subject' => $payload['subject'],
+                    'interval_pt' => $payload['interval_pt'],
+                    'bpm' => $payload['bpm'],
+                    'rr' => $payload['rr'],
+                    'rr_lokal' => $payload['rr_lokal'],
+                    'status' => $payload['status'],
+                    'sdnn' => $processed['sdnn'],
+                    'sns' => $processed['sns'],
+                    'heart_rate' => $payload['heart_rate'] ?: $processed['heart_rate'],
+                ]);
 
-        $prediction = $classifier->classify($payload['raw_signal'], $sampleRate);
-        Prediction::create([
-            'recording_session_id' => $session->id,
-            'label' => $prediction['label'],
-            'confidence' => $prediction['confidence'],
-            'model_version' => $prediction['model_version'],
-            'error_message' => $prediction['error_message'],
-            'predicted_at' => now(),
-        ]);
+                EkgRawSignal::create([
+                    'recording_session_id' => $session->id,
+                    'voltage_values' => $processor->roundSeries($payload['raw_signal'], 6),
+                    'filtered_values' => $processed['filtered_values'],
+                    'r_peak_indices' => $processed['r_peak_indices'],
+                    'sample_rate' => $sampleRate,
+                    'total_samples' => count($payload['raw_signal']),
+                ]);
 
-        $minimumSamples = max((int) config('ekg.minimum_samples', 5000), 2);
-        if (count($payload['raw_signal']) < $minimumSamples) {
-            $this->warn(sprintf(
-                'Sinyal sesi #%d belum mencukupi: %d dari minimal %d sampel. Data tetap disimpan.',
+                Prediction::create([
+                    'recording_session_id' => $session->id,
+                    'label' => $prediction['label'],
+                    'confidence' => $prediction['confidence'],
+                    'model_version' => $prediction['model_version'],
+                    'error_message' => $prediction['error_message'],
+                    'predicted_at' => now(),
+                ]);
+
+                return [$session, $patient];
+            });
+
+            $minimumSamples = max((int) config('ekg.minimum_samples', 5000), 2);
+            if (count($payload['raw_signal']) < $minimumSamples) {
+                $this->warn(sprintf(
+                    'Sinyal sesi #%d belum mencukupi: %d dari minimal %d sampel. Data tetap disimpan.',
+                    $session->id,
+                    count($payload['raw_signal']),
+                    $minimumSamples
+                ));
+            }
+
+            $this->info(sprintf(
+                'Session saved: #%d, UUID=%s, Device=%s, Facility=%s, Patient=%s, BPM=%s',
                 $session->id,
-                count($payload['raw_signal']),
-                $minimumSamples
+                $session->session_uuid,
+                $device->device_uid,
+                $facility->code,
+                $patient->name,
+                $payload['bpm']
             ));
+            $this->savedSessions++;
+        } catch (Throwable $exception) {
+            $this->error("Payload device {$deviceUid} gagal disimpan: {$exception->getMessage()}");
+            report($exception);
+        } finally {
+            unset($this->buffers[$deviceUid]);
         }
-
-        $this->info("Session saved: #{$session->id}, Patient={$patient->name}, BPM={$payload['bpm']}");
-        $this->buffer = [];
     }
 
-    private function hasCompleteFeaturePayload(): bool
+    private function hasCompleteFeaturePayload(string $deviceUid): bool
     {
         foreach (self::REQUIRED_FIELDS as $field) {
-            if (! array_key_exists($field, $this->buffer)) {
+            if (! array_key_exists($field, $this->buffers[$deviceUid] ?? [])) {
                 return false;
             }
         }
@@ -257,26 +337,76 @@ class MqttListenCommand extends Command
             ->all();
     }
 
-    private function resolveDevice(): Device
+    private function resolveTopicContext(string $topic, string $message): array
     {
-        $deviceUid = (string) env('MQTT_DEVICE_UID', 'EKG-001');
-        $device = Device::query()->where('device_uid', $deviceUid)->first();
+        if (preg_match('#^ekg/([^/]+)/([^/]+)$#i', $topic, $matches) === 1) {
+            $field = self::FIELD_ALIASES[strtolower($matches[2])] ?? null;
 
-        if ($device) {
-            return $device;
+            return [$this->normalizeIdentifier($matches[1]), $field];
         }
 
-        $puskesmas = Puskesmas::query()->firstOrCreate(
-            ['code' => 'PKM-001'],
-            ['name' => 'Puskesmas 1']
-        );
+        $field = self::TOPIC_TO_FIELD[$topic] ?? null;
+        if ($field === 'device_uid') {
+            return [null, $field];
+        }
 
-        return Device::query()->create([
-            'puskesmas_id' => $puskesmas->id,
-            'name' => 'Alat EKG 1',
-            'device_uid' => $deviceUid,
-            'mqtt_client_id' => env('MQTT_CLIENT_ID'),
-            'status' => 'unknown',
-        ]);
+        $deviceUid = $this->legacyDeviceUid
+            ?: $this->normalizeIdentifier((string) config('mqtt.legacy_device_uid', ''));
+
+        return [$deviceUid !== '' ? $deviceUid : null, $field];
+    }
+
+    private function normalizeIdentifier(string $value): string
+    {
+        return strtoupper(trim($value));
+    }
+
+    /**
+     * @return array{0: Device, 1: Puskesmas}
+     */
+    private function resolveDeviceAndFacility(string $deviceUid, array $buffer): array
+    {
+        $device = Device::query()
+            ->with('activeAssignments')
+            ->where('device_uid', $deviceUid)
+            ->first();
+
+        if (! $device) {
+            throw new \RuntimeException("Device UID {$deviceUid} belum terdaftar.");
+        }
+
+        $facilityId = trim((string) ($buffer['faskes_id'] ?? config('mqtt.legacy_facility_id', '')));
+        $facilityCode = strtoupper(trim((string) ($buffer['faskes_code'] ?? config('mqtt.legacy_facility_code', ''))));
+
+        $facility = null;
+        if ($facilityId !== '') {
+            if (! ctype_digit($facilityId)) {
+                throw new \RuntimeException("faskes_id {$facilityId} tidak valid.");
+            }
+
+            $facility = Puskesmas::query()->find((int) $facilityId);
+        } elseif ($facilityCode !== '') {
+            $facility = Puskesmas::query()->where('code', $facilityCode)->first();
+        } elseif ($device->puskesmas_id) {
+            // Compatibility for old devices while their firmware still uses global topics.
+            $facility = Puskesmas::query()->find($device->puskesmas_id);
+        }
+
+        if (! $facility) {
+            throw new \RuntimeException('Fasilitas kesehatan tidak ditemukan atau belum dikirim oleh alat.');
+        }
+
+        $hasActiveAssignments = $device->activeAssignments->isNotEmpty();
+        $isActivelyAssigned = $device->activeAssignments
+            ->contains(fn ($assignment) => $assignment->puskesmas_id === $facility->id);
+        $isLegacyFacility = ! $hasActiveAssignments && $device->puskesmas_id === $facility->id;
+
+        if (! $isActivelyAssigned && ! $isLegacyFacility) {
+            throw new \RuntimeException(
+                "Device {$deviceUid} tidak sedang ditugaskan ke fasilitas {$facility->code}."
+            );
+        }
+
+        return [$device, $facility];
     }
 }

@@ -6,10 +6,12 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 
 class RecordingSession extends Model
 {
     protected $fillable = [
+        'session_uuid',
         'puskesmas_id',
         'device_id',
         'patient_id',
@@ -18,6 +20,13 @@ class RecordingSession extends Model
         'source',
         'notes',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (RecordingSession $session): void {
+            $session->session_uuid ??= (string) Str::uuid();
+        });
+    }
 
     protected function casts(): array
     {

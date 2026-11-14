@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeviceController;
+use App\Http\Controllers\FacilityController;
 use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\RecordingController;
@@ -28,12 +29,19 @@ Route::middleware('auth')->group(function () {
     Route::get('/rekaman/{recording}', [RecordingController::class, 'show'])->name('recordings.show');
 
     Route::get('/monitoring', [MonitoringController::class, 'index'])->name('monitoring.index');
+    Route::get('/fasilitas-kesehatan', [FacilityController::class, 'index'])->name('facilities.index');
+    Route::get('/fasilitas-kesehatan/{facility}', [FacilityController::class, 'show'])->name('facilities.show');
     Route::get('/alat-ekg', [DeviceController::class, 'index'])->name('devices.index');
-    Route::post('/alat-ekg', [DeviceController::class, 'store'])->name('devices.store');
-    Route::put('/alat-ekg/{device}', [DeviceController::class, 'update'])->name('devices.update');
-    Route::delete('/alat-ekg/{device}', [DeviceController::class, 'destroy'])->name('devices.destroy');
 
     Route::middleware('role:super_admin')->group(function () {
+        Route::post('/fasilitas-kesehatan', [FacilityController::class, 'store'])->name('facilities.store');
+        Route::put('/fasilitas-kesehatan/{facility}', [FacilityController::class, 'update'])->name('facilities.update');
+        Route::delete('/fasilitas-kesehatan/{facility}', [FacilityController::class, 'destroy'])->name('facilities.destroy');
+
+        Route::post('/alat-ekg', [DeviceController::class, 'store'])->name('devices.store');
+        Route::put('/alat-ekg/{device}', [DeviceController::class, 'update'])->name('devices.update');
+        Route::delete('/alat-ekg/{device}', [DeviceController::class, 'destroy'])->name('devices.destroy');
+
         Route::get('/users', [UserManagementController::class, 'index'])->name('users.index');
         Route::post('/users', [UserManagementController::class, 'store'])->name('users.store');
         Route::put('/users/{user}', [UserManagementController::class, 'update'])->name('users.update');

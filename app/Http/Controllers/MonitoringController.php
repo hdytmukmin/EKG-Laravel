@@ -17,7 +17,7 @@ class MonitoringController extends Controller
         try {
             $devices = Device::query()
                 ->with('puskesmas')
-                ->when(! $request->user()->isSuperAdmin(), fn ($query) => $query->where('puskesmas_id', $request->user()->puskesmas_id))
+                ->visibleTo($request->user())
                 ->latest('last_seen_at')
                 ->get();
 
@@ -58,7 +58,7 @@ class MonitoringController extends Controller
                 ->first();
 
             $devices = Device::query()
-                ->when(! $request->user()->isSuperAdmin(), fn ($query) => $query->where('puskesmas_id', $request->user()->puskesmas_id))
+                ->visibleTo($request->user())
                 ->get();
 
             return response()->json([

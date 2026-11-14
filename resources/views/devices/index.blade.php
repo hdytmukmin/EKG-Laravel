@@ -8,9 +8,11 @@
     <div class="panel">
         <div class="panel-header">
             <h2 class="h5 fw-bold mb-0">Daftar Alat</h2>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDevice">
-                <i class="bi bi-plus-lg me-1"></i>Tambah
-            </button>
+            @if (auth()->user()->isSuperAdmin())
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDevice">
+                    <i class="bi bi-plus-lg me-1"></i>Tambah
+                </button>
+            @endif
         </div>
         <div class="panel-body">
             <form method="GET" class="row g-2 align-items-end">
@@ -53,7 +55,9 @@
                             <th>Status</th>
                             <th>Last Seen</th>
                             <th>Sesi</th>
-                            <th class="text-end">Aksi</th>
+                            @if (auth()->user()->isSuperAdmin())
+                                <th class="text-end">Aksi</th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody>
@@ -63,7 +67,7 @@
                                     <div class="fw-bold">{{ $device->name }}</div>
                                     <div class="small text-secondary">{{ $device->device_uid }}</div>
                                 </td>
-                                <td>{{ $device->puskesmas?->name ?? '-' }}</td>
+                                <td>{{ $device->facilities->pluck('name')->join(', ') ?: ($device->puskesmas?->name ?? '-') }}</td>
                                 <td>{{ $device->mqtt_client_id ?: '-' }}</td>
                                 <td>
                                     <span class="badge {{ $device->statusBadgeClass() }}">
@@ -72,6 +76,7 @@
                                 </td>
                                 <td>{{ $device->last_seen_at?->format('Y-m-d H:i:s') ?? '-' }}</td>
                                 <td>{{ $device->recording_sessions_count }}</td>
+                                @if (auth()->user()->isSuperAdmin())
                                 <td class="text-end">
                                     <div class="btn-group">
                                         <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editDevice{{ $device->id }}" title="Edit alat"><i class="bi bi-pencil"></i></button>
@@ -82,9 +87,10 @@
                                         </form>
                                     </div>
                                 </td>
+                                @endif
                             </tr>
                         @empty
-                            <tr><td colspan="7"><div class="empty-state">Belum ada alat sesuai filter.</div></td></tr>
+                            <tr><td colspan="{{ auth()->user()->isSuperAdmin() ? 7 : 6 }}"><div class="empty-state">Belum ada alat sesuai filter.</div></td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -94,6 +100,7 @@
         </div>
     </div>
 
+    @if (auth()->user()->isSuperAdmin())
     <div class="modal fade" id="createDevice" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog">
             <form class="modal-content" method="POST" action="{{ route('devices.store') }}">
@@ -134,4 +141,5 @@
             </div>
         </div>
     @endforeach
+    @endif
 @endsection
