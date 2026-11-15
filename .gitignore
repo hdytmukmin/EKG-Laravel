@@ -22,3 +22,7 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+/docs/_qa/
+/docs/_rendered/
+/docs/_word_qa/
+/docs/_executive_qa/
