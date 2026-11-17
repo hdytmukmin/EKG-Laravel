@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import sys
+import traceback
 
 
 def main():
@@ -27,14 +28,27 @@ def main():
     result = predict_ecg(raw_signal, fs=sample_rate)
     diagnosis = str(result.get("overall_diagnosis", "PENDING_MODEL"))
     probabilities = result.get("overall_probabilities", {})
-    confidence = probabilities.get(diagnosis)
+    is_non_af = diagnosis.strip().lower().replace("_", "-") in {"non-af", "nonaf", "normal"}
+    label = "NON_AF" if is_non_af else "AF"
+    binary_probabilities = {
+        "NON_AF": float(probabilities.get("Non-AF", 0.0)),
+        "AF": float(probabilities.get("Persistent AF", 0.0))
+        + float(probabilities.get("Paroxysmal AF", 0.0)),
+    }
+    confidence = binary_probabilities.get(label)
+
+    segments = result.get("segments", [])
+    for segment in segments:
+        segment["predicted_class"] = (
+            "NON_AF" if str(segment.get("predicted_class", "")).strip() == "Non-AF" else "AF"
+        )
 
     print(json.dumps({
-        "label": diagnosis,
+        "label": label,
         "confidence": confidence,
-        "overall_probabilities": probabilities,
+        "overall_probabilities": binary_probabilities,
         "total_segments": result.get("total_segments"),
-        "segments": result.get("segments", []),
+        "segments": segments,
     }))
 
 
@@ -42,5 +56,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        print(json.dumps({"error": str(exc)}))
+        print(json.dumps({"error": str(exc), "traceback": traceback.format_exc()}))
         sys.exit(1)

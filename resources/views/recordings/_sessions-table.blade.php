@@ -18,12 +18,10 @@
         </thead>
         <tbody>
             @forelse ($sessions as $session)
-                @php($afLabels = ['AF', 'PERSISTENT_AF', 'PAROXYSMAL_AF'])
+                @php($afLabels = ['AF'])
                 @php($predictionLabel = $session->prediction?->label)
                 @php($isAf = in_array($predictionLabel, $afLabels, true))
                 @php($predictionText = match ($predictionLabel) {
-                    'PERSISTENT_AF' => 'Persistent AF',
-                    'PAROXYSMAL_AF' => 'Paroxysmal AF',
                     'NON_AF' => 'Non-AF',
                     default => $predictionLabel ?? 'PENDING',
                 })

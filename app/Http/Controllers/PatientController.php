@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Patient;
+use App\Models\Puskesmas;
 use App\Models\RecordingSession;
 use App\Support\AccessScope;
 use Illuminate\Database\QueryException;
@@ -14,6 +15,7 @@ class PatientController extends Controller
     public function index(Request $request)
     {
         try {
+            $user = $request->user();
             $query = AccessScope::apply(Patient::query(), $request->user())
                 ->withCount('recordingSessions')
                 ->with('puskesmas')
@@ -31,18 +33,26 @@ class PatientController extends Controller
             $patients = $query
                 ->paginate((int) $request->query('per_page', 10))
                 ->withQueryString();
+            $facilities = $user->isSuperAdmin()
+                ? Puskesmas::query()->orderBy('name')->get(['id', 'name', 'code'])
+                : Puskesmas::query()->whereKey($user->puskesmas_id)->get(['id', 'name', 'code']);
             $dbError = null;
         } catch (QueryException $exception) {
             $patients = collect();
+            $facilities = collect();
             $dbError = $exception->getMessage();
         }
 
-        return view('patients.index', compact('patients', 'dbError'));
+        return view('patients.index', compact('patients', 'facilities', 'dbError'));
     }
 
     public function store(Request $request)
     {
+        $user = $request->user();
         $data = $request->validate([
+            'puskesmas_id' => $user->isSuperAdmin()
+                ? ['required', 'integer', 'exists:puskesmas,id']
+                : ['nullable'],
             'name' => ['required', 'string', 'max:255'],
             'age' => ['nullable', 'integer', 'min:0', 'max:120'],
             'gender' => ['nullable', 'string', 'max:32'],
@@ -50,8 +60,11 @@ class PatientController extends Controller
         ]);
 
         try {
-            $user = $request->user();
-            $puskesmasId = $user->isSuperAdmin() ? ($request->integer('puskesmas_id') ?: 1) : $user->puskesmas_id;
+            $puskesmasId = $user->isSuperAdmin() ? (int) $data['puskesmas_id'] : $user->puskesmas_id;
+
+            if (! $puskesmasId || ! Puskesmas::query()->whereKey($puskesmasId)->exists()) {
+                return redirect()->back()->withInput()->with('error', 'Fasilitas kesehatan akun tidak ditemukan.');
+            }
 
             Patient::query()->create([
                 'puskesmas_id' => $puskesmasId,
@@ -61,7 +74,9 @@ class PatientController extends Controller
                 'address' => $data['address'] ?? null,
             ]);
         } catch (Throwable $exception) {
-            return redirect()->back()->with('error', 'Data pasien gagal disimpan: '.$exception->getMessage());
+            report($exception);
+
+            return redirect()->back()->withInput()->with('error', 'Data pasien gagal disimpan. Silakan periksa fasilitas kesehatan dan data pasien.');
         }
 
         return redirect()->route('patients.index')->with('success', 'Pasien berhasil ditambahkan.');

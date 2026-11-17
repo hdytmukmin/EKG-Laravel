@@ -22,6 +22,8 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+__pycache__/
+*.pyc
 /docs/_qa/
 /docs/_rendered/
 /docs/_word_qa/

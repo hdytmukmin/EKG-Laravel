@@ -26,19 +26,20 @@ class DeepLearningEcgClassificationService
             );
         }
 
-        if (! (bool) env('DL_MODEL_ENABLED', true)) {
+        if (! (bool) config('ekg.deep_learning.enabled', true)) {
             return $this->pending(null, 'Model deep learning belum diaktifkan.');
         }
 
-        $pipelineDir = $this->resolvePath((string) env('DL_MODEL_DIR', ''));
-        $scriptPath = $this->resolvePath((string) env('DL_PREDICT_SCRIPT', base_path('scripts/predict_dl_ecg.py')));
-        $python = (string) env('PYTHON_BINARY', env('EKG_PYTHON_BIN', 'python'));
+        $pipelineDir = $this->resolvePath((string) config('ekg.deep_learning.model_dir', ''));
+        $scriptPath = $this->resolvePath((string) config('ekg.deep_learning.predict_script', base_path('scripts/predict_dl_ecg.py')));
+        $python = (string) config('ekg.deep_learning.python_binary', 'python');
+        $weightsFile = (string) config('ekg.deep_learning.weights_file', 'best_dl_modelExp3LSTMTuned.pth');
 
         if ($pipelineDir === '' || ! is_dir($pipelineDir)) {
             return $this->pending(null, 'Folder pipeline model deep learning belum tersedia.');
         }
 
-        if (! is_file($pipelineDir.DIRECTORY_SEPARATOR.'best_dl_modelExp3LSTMTuned.pth')) {
+        if (! is_file($pipelineDir.DIRECTORY_SEPARATOR.$weightsFile)) {
             return $this->pending(basename($pipelineDir), 'File bobot model deep learning belum tersedia.');
         }
 
@@ -53,7 +54,7 @@ class DeepLearningEcgClassificationService
         ], JSON_THROW_ON_ERROR));
 
         try {
-            $result = Process::timeout((int) env('DL_PREDICTION_TIMEOUT', env('EKG_PREDICTION_TIMEOUT', 180)))->run([
+            $result = Process::timeout(max((int) config('ekg.deep_learning.timeout', 180), 1))->run([
                 $python,
                 $scriptPath,
                 '--pipeline-dir',
@@ -71,6 +72,13 @@ class DeepLearningEcgClassificationService
 
         $decoded = json_decode($result->output(), true);
         if (! $result->successful() || ! is_array($decoded) || isset($decoded['error'])) {
+            logger()->warning('Deep learning ECG prediction failed', [
+                'error' => $decoded['error'] ?? null,
+                'traceback' => $decoded['traceback'] ?? null,
+                'stderr' => $result->errorOutput(),
+                'exit_code' => $result->exitCode(),
+            ]);
+
             return $this->pending(
                 basename($pipelineDir),
                 (string) ($decoded['error'] ?? $result->errorOutput() ?: 'Prediksi deep learning gagal dijalankan.')
@@ -80,7 +88,7 @@ class DeepLearningEcgClassificationService
         return [
             'label' => $this->normalizeLabel((string) ($decoded['label'] ?? 'PENDING_MODEL')),
             'confidence' => isset($decoded['confidence']) ? (float) $decoded['confidence'] : null,
-            'model_version' => 'best_dl_modelExp3LSTMTuned.pth',
+            'model_version' => $weightsFile,
             'error_message' => null,
         ];
     }
@@ -102,13 +110,15 @@ class DeepLearningEcgClassificationService
     {
         $clean = strtoupper(str_replace([' ', '-'], '_', trim($label)));
 
-        return match ($clean) {
-            'NON_AF', 'NONAF', 'NORMAL' => 'NON_AF',
-            'PERSISTENT_AF' => 'PERSISTENT_AF',
-            'PAROXYSMAL_AF' => 'PAROXYSMAL_AF',
-            'AF', 'ATRIAL_FIBRILLATION' => 'AF',
-            default => $label,
-        };
+        if (in_array($clean, ['NON_AF', 'NONAF', 'NORMAL'], true)) {
+            return 'NON_AF';
+        }
+
+        if ($clean === 'AF' || str_contains($clean, 'ATRIAL_FIBRILLATION') || str_ends_with($clean, '_AF')) {
+            return 'AF';
+        }
+
+        return $label;
     }
 
     private function resolvePath(string $path): string

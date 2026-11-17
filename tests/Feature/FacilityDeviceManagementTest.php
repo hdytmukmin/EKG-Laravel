@@ -100,6 +100,38 @@ class FacilityDeviceManagementTest extends TestCase
         ]);
     }
 
+    public function test_super_admin_must_select_an_existing_facility_when_creating_patient(): void
+    {
+        $superAdmin = $this->createUser('super_admin');
+
+        $this->actingAs($superAdmin)
+            ->post(route('patients.store'), ['name' => 'Pasien tanpa fasilitas'])
+            ->assertSessionHasErrors('puskesmas_id');
+
+        $this->assertDatabaseMissing('patients', ['name' => 'Pasien tanpa fasilitas']);
+    }
+
+    public function test_patient_is_created_in_the_facility_selected_by_super_admin(): void
+    {
+        $facility = $this->createFacility('FAC-PATIENT');
+        $superAdmin = $this->createUser('super_admin');
+
+        $this->actingAs($superAdmin)
+            ->post(route('patients.store'), [
+                'puskesmas_id' => $facility->id,
+                'name' => 'Pasien fasilitas',
+                'age' => 45,
+                'gender' => 'Laki-laki',
+                'address' => 'Alamat pasien',
+            ])
+            ->assertRedirect(route('patients.index'));
+
+        $this->assertDatabaseHas('patients', [
+            'puskesmas_id' => $facility->id,
+            'name' => 'Pasien fasilitas',
+        ]);
+    }
+
     private function createFacility(string $code): Puskesmas
     {
         return Puskesmas::query()->create([

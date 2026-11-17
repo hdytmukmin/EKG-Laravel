@@ -51,4 +51,5 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/monitoring/latest', [MonitoringController::class, 'latest'])->name('monitoring.latest');
     Route::get('/api/patients/{patient}/bpm-trend', [PatientController::class, 'bpmTrend'])->name('patients.bpm-trend');
     Route::get('/api/recordings/{recording}/chart-data', [RecordingController::class, 'chartData'])->name('recordings.chart-data');
+    Route::get('/api/recordings/{recording}/prediction', [RecordingController::class, 'predictionStatus'])->name('recordings.prediction-status');
 });

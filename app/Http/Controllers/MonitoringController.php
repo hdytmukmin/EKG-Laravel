@@ -114,7 +114,7 @@ class MonitoringController extends Controller
                 return $session->prediction?->label;
             });
 
-        $afLabels = ['AF', 'PERSISTENT_AF', 'PAROXYSMAL_AF'];
+        $afLabels = ['AF'];
         $af = $labels->filter(fn ($label) => in_array($label, $afLabels, true))->count();
         $nonAf = $labels->filter(fn ($label) => $label === 'NON_AF')->count();
 

@@ -9,7 +9,7 @@ use App\Models\Patient;
 use App\Models\Prediction;
 use App\Models\Puskesmas;
 use App\Models\RecordingSession;
-use App\Services\AfClassificationService;
+use App\Services\DeepLearningEcgClassificationService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -27,7 +27,7 @@ class ImportLegacyEcgCsvCommand extends Command
     public function handle(): int
     {
         $sampleRate = max(1, (int) $this->option('sample-rate'));
-        $classifier = app(AfClassificationService::class);
+        $classifier = app(DeepLearningEcgClassificationService::class);
 
         if ($this->option('replace')) {
             $this->replaceLocalEcgData();
@@ -52,12 +52,14 @@ class ImportLegacyEcgCsvCommand extends Command
         foreach ($this->argument('files') as $path) {
             if (! is_file($path)) {
                 $this->warn("File tidak ditemukan: {$path}");
+
                 continue;
             }
 
             $values = $this->readVoltageValues($path);
             if (count($values) < $sampleRate) {
                 $this->warn("File dilewati karena sample terlalu sedikit: {$path}");
+
                 continue;
             }
 
@@ -96,7 +98,7 @@ class ImportLegacyEcgCsvCommand extends Command
                 'notes' => basename($path),
             ]);
 
-            $feature = EkgFeature::create([
+            EkgFeature::create([
                 'recording_session_id' => $session->id,
                 'subject' => $subject,
                 'interval_pt' => null,
@@ -109,10 +111,7 @@ class ImportLegacyEcgCsvCommand extends Command
                 'heart_rate' => $heartRate,
             ]);
 
-            $prediction = $classifier->classify($feature);
-            if ($prediction['label'] === 'PENDING_MODEL') {
-                $prediction = $this->fallbackPrediction($sdnn, $rmssd, $prediction['error_message']);
-            }
+            $prediction = $classifier->classify($values, $sampleRate);
 
             EkgRawSignal::create([
                 'recording_session_id' => $session->id,
@@ -288,7 +287,7 @@ class ImportLegacyEcgCsvCommand extends Command
     }
 
     /**
-     * @param list<float> $values
+     * @param  list<float>  $values
      * @return list<float>
      */
     private function baselineFiltered(array $values, int $window, float $scale): array
@@ -313,7 +312,7 @@ class ImportLegacyEcgCsvCommand extends Command
     }
 
     /**
-     * @param list<float> $filtered
+     * @param  list<float>  $filtered
      * @return list<int>
      */
     private function detectRPeaks(array $filtered, int $sampleRate): array
@@ -346,7 +345,7 @@ class ImportLegacyEcgCsvCommand extends Command
     }
 
     /**
-     * @param list<int> $rPeaks
+     * @param  list<int>  $rPeaks
      * @return list<float>
      */
     private function rrIntervals(array $rPeaks, int $sampleRate): array
@@ -360,7 +359,7 @@ class ImportLegacyEcgCsvCommand extends Command
     }
 
     /**
-     * @param list<float> $rrIntervals
+     * @param  list<float>  $rrIntervals
      */
     private function bpmFromRr(array $rrIntervals): ?float
     {
@@ -374,7 +373,7 @@ class ImportLegacyEcgCsvCommand extends Command
     }
 
     /**
-     * @param list<float> $rrIntervals
+     * @param  list<float>  $rrIntervals
      * @return list<float>
      */
     private function heartRateSeries(array $rrIntervals): array
@@ -383,7 +382,7 @@ class ImportLegacyEcgCsvCommand extends Command
     }
 
     /**
-     * @param list<float> $rrIntervals
+     * @param  list<float>  $rrIntervals
      */
     private function sdnn(array $rrIntervals): ?float
     {
@@ -398,7 +397,7 @@ class ImportLegacyEcgCsvCommand extends Command
     }
 
     /**
-     * @param list<float> $rrIntervals
+     * @param  list<float>  $rrIntervals
      */
     private function rmssd(array $rrIntervals): ?float
     {
@@ -416,32 +415,7 @@ class ImportLegacyEcgCsvCommand extends Command
     }
 
     /**
-     * @return array{label: string, confidence: float|null, error_message: string|null}
-     */
-    private function fallbackPrediction(?float $sdnn, ?float $rmssd, ?string $modelError = null): array
-    {
-        if ($sdnn === null || $rmssd === null) {
-            return [
-                'label' => 'PENDING_MODEL',
-                'confidence' => null,
-                'model_version' => null,
-                'error_message' => 'Fitur SDNN/RMSSD belum cukup untuk klasifikasi fallback.',
-            ];
-        }
-
-        $irregularityScore = ($sdnn * 0.65) + ($rmssd * 0.35);
-        $isAf = $irregularityScore >= 110;
-
-        return [
-            'label' => $isAf ? 'AF' : 'NON_AF',
-            'confidence' => $isAf ? 0.82 : 0.78,
-            'model_version' => 'legacy-csv-fallback',
-            'error_message' => trim('Klasifikasi fallback berbasis SDNN/RMSSD.'.($modelError ? ' Model: '.$modelError : '')),
-        ];
-    }
-
-    /**
-     * @param list<float> $values
+     * @param  list<float>  $values
      * @return list<float>
      */
     private function roundSeries(array $values, int $precision): array

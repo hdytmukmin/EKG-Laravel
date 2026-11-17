@@ -6,6 +6,10 @@
     <div class="alert alert-danger border-0 shadow-sm">{{ session('error') }}</div>
 @endif
 
+@if (session('warning'))
+    <div class="alert alert-warning border-0 shadow-sm">{{ session('warning') }}</div>
+@endif
+
 @if ($errors->any())
     <div class="alert alert-danger border-0 shadow-sm">
         <strong>Validasi belum sesuai.</strong>

@@ -324,8 +324,10 @@ EKG_PYTHON_BIN=python
 DL_MODEL_ENABLED=true
 DL_MODEL_DIR=../model/DeployModelEks3
 DL_PREDICT_SCRIPT=scripts/predict_dl_ecg.py
+DL_MODEL_WEIGHTS=best_dl_modelExp3LSTMTuned.pth
 DL_PREDICTION_TIMEOUT=180
 EKG_SAMPLE_RATE=250
+EKG_MINIMUM_SAMPLES=5000
 ```
 
 Model deep learning menggunakan raw signal EKG langsung melalui `pipeline.py`, sehingga prediksi tidak memakai fitur BPM/RR/SDNN/RMSSD sebagai input model. Fitur klinis tetap disimpan untuk grafik dan ringkasan.
@@ -346,6 +348,36 @@ Jika model atau dependency belum tersedia, aplikasi akan menampilkan prediksi se
 
 ```text
 PENDING_MODEL
+```
+
+Periksa kesiapan model setelah mengubah `.env` atau melakukan deployment:
+
+```bash
+php artisan config:cache
+php artisan ekg:model-check --run
+```
+
+Setelah environment model sehat, proses ulang data pending yang sudah memiliki minimal 5.000 sampel tanpa upload ulang:
+
+```bash
+php artisan ekg:retry-pending --dry-run
+php artisan ekg:retry-pending --limit=100
+```
+
+Rekaman di bawah 5.000 sampel tetap disimpan, tetapi sengaja tidak diprediksi dan tidak diproses oleh command retry.
+
+Upload dari website mengirim prediksi ke queue terpisah agar proses PyTorch tidak dijalankan di dalam request web. Pastikan worker berikut selalu aktif:
+
+```bash
+php artisan queue:work database --queue=ekg-predictions --sleep=1 --tries=1 --timeout=300
+```
+
+Gunakan Supervisor atau systemd di VPS agar worker otomatis hidup kembali setelah server restart. Konfigurasi queue yang diperlukan:
+
+```env
+QUEUE_CONNECTION=database
+EKG_PREDICTION_QUEUE=ekg-predictions
+DB_QUEUE_RETRY_AFTER=300
 ```
 
 ## Grafik EKG

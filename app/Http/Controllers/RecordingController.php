@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
 
 class RecordingController extends Controller
 {
-    private const AF_LABELS = ['AF', 'PERSISTENT_AF', 'PAROXYSMAL_AF'];
+    private const AF_LABELS = ['AF'];
 
     public function index(Request $request)
     {
@@ -153,6 +153,28 @@ class RecordingController extends Controller
             'total_samples' => $totalSamples,
             'minimum_samples' => $minimumSamples,
             'signal_sufficient' => true,
+        ]);
+    }
+
+    public function predictionStatus(Request $request, RecordingSession $recording): JsonResponse
+    {
+        $recording = RecordingSession::query()
+            ->visibleTo($request->user())
+            ->with('prediction')
+            ->findOrFail($recording->id);
+        $prediction = $recording->prediction;
+        $label = $prediction?->label ?? 'PENDING_MODEL';
+
+        return response()->json([
+            'label' => $label,
+            'display_label' => match ($label) {
+                'AF' => 'AF',
+                'NON_AF' => 'Non-AF',
+                default => 'Sedang diproses',
+            },
+            'completed' => in_array($label, ['AF', 'NON_AF'], true),
+            'confidence' => $prediction?->confidence,
+            'error_message' => $prediction?->error_message,
         ]);
     }
 

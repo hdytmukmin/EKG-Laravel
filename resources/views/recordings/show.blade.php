@@ -18,10 +18,8 @@
     @php($duration = count($rawSignal) / max($sampleRate, 1))
     @php($ekgWidth = min(max((int) ceil($duration * 220), 1100), 30000))
     @php($predictionText = $signalInsufficient ? 'Belum tersedia' : match ($prediction?->label) {
-        'PERSISTENT_AF' => 'Persistent AF',
-        'PAROXYSMAL_AF' => 'Paroxysmal AF',
         'NON_AF' => 'Non-AF',
-        'PENDING_MODEL' => 'Belum tersedia',
+        'PENDING_MODEL' => 'Sedang diproses',
         default => $prediction?->label ?? '-',
     })
 
@@ -48,7 +46,7 @@
             <div class="stat-card">
                 <div>
                     <div class="stat-label">Prediksi</div>
-                    <div class="fw-bold fs-5">{{ $predictionText }}</div>
+                    <div class="fw-bold fs-5" id="predictionLabel">{{ $predictionText }}</div>
                 </div>
                 <div class="stat-icon"><i class="bi bi-clipboard2-pulse fs-4"></i></div>
             </div>
@@ -128,11 +126,9 @@
                         <dt class="col-5 text-secondary">Alat</dt><dd class="col-7">{{ $recording->device?->name ?? '-' }}</dd>
                         <dt class="col-5 text-secondary">Tanggal</dt><dd class="col-7">{{ $recording->recorded_at?->format('Y-m-d H:i:s') ?? '-' }}</dd>
                     </dl>
-                    @if ($prediction?->error_message && ! $signalInsufficient)
-                        <div class="alert alert-warning small mt-3 mb-0">
-                            <i class="bi bi-exclamation-triangle me-1"></i>{{ $prediction->error_message }}
-                        </div>
-                    @endif
+                    <div id="predictionStatusMessage" class="alert alert-warning small mt-3 mb-0 {{ $prediction?->error_message && ! $signalInsufficient ? '' : 'd-none' }}">
+                        <i class="bi bi-hourglass-split me-1"></i><span id="predictionStatusText">{{ $prediction?->error_message }}</span>
+                    </div>
                     <a class="btn btn-outline-primary w-100 mt-3" href="{{ route('recordings.index') }}"><i class="bi bi-arrow-left me-1"></i>Kembali</a>
                 </div>
             </div>
@@ -150,6 +146,8 @@
     const sampleRate = @json($sampleRate);
     const featureBpm = @json($feature?->bpm);
     const featureRr = @json($feature?->rr);
+    const initialPredictionLabel = @json($prediction?->label);
+    const predictionStatusUrl = @json(route('recordings.prediction-status', $recording));
 
     function sessionZoomOptions(minRange = 0.5) {
         return {
@@ -346,6 +344,27 @@
             if (button.dataset.zoomAction === 'reset') chart.resetZoom();
         });
     });
+
+    if (initialPredictionLabel === 'PENDING_MODEL') {
+        const predictionLabel = document.getElementById('predictionLabel');
+        const statusMessage = document.getElementById('predictionStatusMessage');
+        const statusText = document.getElementById('predictionStatusText');
+        let attempts = 0;
+        const timer = window.setInterval(async () => {
+            attempts++;
+            try {
+                const response = await fetch(predictionStatusUrl, { headers: { Accept: 'application/json' } });
+                if (!response.ok) return;
+                const data = await response.json();
+                predictionLabel.textContent = data.display_label;
+                statusText.textContent = data.error_message || 'Prediksi AF/Non-AF sedang diproses.';
+                statusMessage.classList.toggle('d-none', data.completed);
+                if (data.completed || attempts >= 90) window.clearInterval(timer);
+            } catch (error) {
+                if (attempts >= 90) window.clearInterval(timer);
+            }
+        }, 2000);
+    }
 </script>
 @endpush
 @endif

@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\PredictRecordingSession;
 use App\Models\EkgFeature;
 use App\Models\EkgRawSignal;
 use App\Models\Patient;
 use App\Models\Prediction;
 use App\Models\RecordingSession;
-use App\Services\DeepLearningEcgClassificationService;
 use App\Services\EcgSignalProcessingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -18,8 +18,7 @@ class UploadController extends Controller
     public function store(
         Request $request,
         Patient $patient,
-        EcgSignalProcessingService $processor,
-        DeepLearningEcgClassificationService $classifier
+        EcgSignalProcessingService $processor
     ) {
         $request->validate([
             'file' => ['required', 'file', 'mimes:csv,txt', 'max:20480'],
@@ -56,7 +55,7 @@ class UploadController extends Controller
                 'total_samples' => count($rawValues),
             ]);
 
-            $feature = EkgFeature::create([
+            EkgFeature::create([
                 'recording_session_id' => $session->id,
                 'subject' => $patient->name,
                 'interval_pt' => null,
@@ -69,7 +68,12 @@ class UploadController extends Controller
                 'heart_rate' => $processed['heart_rate'],
             ]);
 
-            $prediction = $classifier->classify($rawValues, $sampleRate);
+            $prediction = [
+                'label' => 'PENDING_MODEL',
+                'confidence' => null,
+                'model_version' => null,
+                'error_message' => 'Prediksi sedang diproses.',
+            ];
             Prediction::create([
                 'recording_session_id' => $session->id,
                 'label' => $prediction['label'],
@@ -78,13 +82,22 @@ class UploadController extends Controller
                 'error_message' => $prediction['error_message'],
                 'predicted_at' => now(),
             ]);
+            PredictRecordingSession::dispatch($session->id)
+                ->onQueue((string) config('ekg.prediction_queue', 'ekg-predictions'));
         } catch (Throwable $exception) {
             return redirect()->back()->with('error', 'Upload CSV gagal diproses: '.$exception->getMessage());
         }
 
-        return redirect()
-            ->route('recordings.show', $session)
-            ->with('success', 'CSV berhasil diproses sebagai sesi rekaman baru.');
+        $redirect = redirect()->route('recordings.show', $session);
+
+        if ($prediction['label'] === 'PENDING_MODEL') {
+            return $redirect->with(
+                'warning',
+                'CSV berhasil disimpan. Prediksi AF/Non-AF sedang diproses.'
+            );
+        }
+
+        return $redirect->with('success', 'CSV berhasil diproses dan diprediksi sebagai sesi rekaman baru.');
     }
 
     /**
